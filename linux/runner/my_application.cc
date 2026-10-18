@@ -19,8 +19,9 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(view));
   gtk_widget_show(toplevel);
 
-  // 工具栏窗口类型：不出现在任务栏/Alt-Tab（对应 Electron type: 'toolbar'）。
-  // 仅 X11 下生效；Wayland 不支持窗口类型属性。
+  // Toolbar window type: hidden from taskbar/Alt-Tab
+  // (equivalent to Electron type: 'toolbar').
+  // X11 only; Wayland does not support window type hints.
 #ifdef GDK_WINDOWING_X11
   GdkScreen* screen = gtk_window_get_screen(GTK_WINDOW(toplevel));
   if (GDK_IS_X11_SCREEN(screen)) {
@@ -70,7 +71,8 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "简易时钟");
   }
 
-  // 默认尺寸对应时钟基准大小，window_manager 启动时会再按存档恢复
+  // Default size matches the clock base size; window_manager restores
+  // the saved size/position at startup.
   gtk_window_set_default_size(window, 350, 100);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
