@@ -22,6 +22,7 @@
   - 退出程序
 - 操作结果通过应用内 Toast 轻提示（Toast 显示时自动撑大窗口、文字自适应，任何窗口尺寸都完整可见）
 - 单实例锁：同时只允许一个实例运行（随机端口占位 + 端口号持久化），二次启动自动聚焦已有窗口并静默退出
+- 工具栏窗口模式：不出现在任务栏 / Alt+Tab（对应 Electron `type: 'toolbar'`），配套系统托盘图标（单击恢复窗口、菜单显示/退出；关闭窗口 = 隐藏到托盘）
 - 窗口位置、大小、置顶状态、外观颜色、字体、语言自动持久化，重启恢复
 - 多显示器下窗口位置越界自动归位到主屏
 
@@ -37,6 +38,7 @@
 | 自动更新 | electron-updater（GitHub Releases） | 自建更新器（GitHub Releases API 检查 → 下载 → 静默安装） |
 | 系统通知 | Electron Notification | 应用内轻提示 Toast（跨平台可靠） |
 | 单实例锁 | requestSingleInstanceLock | 随机端口占位 + 端口号持久化（纯 Dart，三平台通用） |
+| 工具栏窗口 | BrowserWindow `type: 'toolbar'` | 原生窗口样式（Win `WS_EX_TOOLWINDOW` / macOS `LSUIElement` / Linux `_NET_WM_WINDOW_TYPE_TOOLBAR`）+ 系统托盘 |
 
 ## 环境要求
 
@@ -127,6 +129,7 @@ lib/
 │   ├── auto_launch_service.dart  # 开机自启动（launch_at_startup）
 │   ├── font_service.dart         # 系统字体枚举（Windows 注册表 / macOS 目录 / Linux fc-list）
 │   ├── single_instance_service.dart  # 单实例锁（随机端口 + 端口号持久化）
+│   ├── tray_service.dart         # 系统托盘（工具栏窗口的恢复/退出入口）
 │   ├── update_service.dart       # 自动更新（GitHub Releases 检查 / 下载 / 启动安装器）
 │   ├── update_config.dart        # 更新配置（GitHub 仓库、当前版本号）
 │   └── app_strings.dart          # 中英文案（轻量 i18n，无 codegen）

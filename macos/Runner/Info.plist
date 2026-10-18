@@ -28,5 +28,8 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- 工具栏/常驻工具窗模式：不出现在 Dock（应用入口仅剩菜单栏托盘图标） -->
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>

@@ -4,6 +4,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'controllers/app_controller.dart';
 import 'services/app_strings.dart';
+import 'services/tray_service.dart';
 import 'ui/clock_page.dart';
 
 /// 应用根组件：监听窗口事件、提供全局主题。
@@ -31,8 +32,13 @@ class _ClockAppState extends State<ClockApp> with WindowListener {
 
   @override
   void onWindowClose() {
-    // 关闭窗口：先持久化状态再销毁（quitApp 内部有防重入保护）
-    widget.controller.quitApp();
+    // 工具栏窗口模式：关闭窗口 = 隐藏到托盘（不退出）
+    if (TrayService.instance.isActive) {
+      windowManager.hide();
+    } else {
+      // 无托盘环境（初始化失败）时回退为：持久化状态后销毁窗口退出
+      widget.controller.quitApp();
+    }
   }
 
   @override

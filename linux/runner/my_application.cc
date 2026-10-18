@@ -16,7 +16,25 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(view));
+  gtk_widget_show(toplevel);
+
+  // 工具栏窗口类型：不出现在任务栏/Alt-Tab（对应 Electron type: 'toolbar'）。
+  // 仅 X11 下生效；Wayland 不支持窗口类型属性。
+#ifdef GDK_WINDOWING_X11
+  GdkScreen* screen = gtk_window_get_screen(GTK_WINDOW(toplevel));
+  if (GDK_IS_X11_SCREEN(screen)) {
+    GdkWindow* gdk_window = gtk_widget_get_window(toplevel);
+    if (gdk_window != nullptr) {
+      GdkAtom wm_type = gdk_atom_intern("_NET_WM_WINDOW_TYPE", FALSE);
+      GdkAtom wm_toolbar =
+          gdk_atom_intern("_NET_WM_WINDOW_TYPE_TOOLBAR", FALSE);
+      gdk_property_change(gdk_window, wm_type,
+                          gdk_atom_intern("ATOM", FALSE), 32,
+                          GDK_PROP_MODE_REPLACE, (const guchar*)&wm_toolbar, 1);
+    }
+  }
+#endif
 }
 
 // Implements GApplication::activate.

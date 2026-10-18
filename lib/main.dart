@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:screen_retriever/screen_retriever.dart';
+import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'controllers/app_controller.dart';
 import 'services/single_instance_service.dart';
 import 'services/store_service.dart';
+import 'services/tray_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,8 @@ Future<void> main() async {
   final singleInstance = SingleInstanceService(store);
   final isPrimary = await singleInstance.acquire(onActivate: () async {
     try {
+      // 窗口可能隐藏在托盘，先 show 再 focus
+      await windowManager.show();
       await windowManager.focus();
     } catch (_) {}
   });
@@ -69,6 +73,30 @@ Future<void> main() async {
   });
 
   runApp(ClockApp(controller: controller));
+
+  // 初始化系统托盘（工具栏窗口的配套入口：恢复窗口 / 退出）。
+  // 失败（如无托盘环境）时自动降级为"关闭=退出"，不影响使用。
+  final isEn = controller.language == 'en';
+  await TrayService.instance.init(
+    tooltip: isEn ? 'SimpleClock' : '简易时钟',
+    menu: [
+      MenuItem(
+        key: 'show',
+        label: isEn ? 'Show Clock' : '显示时钟',
+      ),
+      MenuItem(
+        key: 'quit',
+        label: isEn ? 'Quit' : '退出',
+      ),
+    ],
+    onShow: () async {
+      try {
+        await windowManager.show();
+        await windowManager.focus();
+      } catch (_) {}
+    },
+    onQuit: () => controller.quitApp(),
+  );
 }
 
 /// 将保存的窗口位置钳制到可见屏幕范围内（多显示器场景）。

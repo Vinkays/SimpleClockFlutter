@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../services/single_instance_service.dart';
 import '../services/store_service.dart';
+import '../services/tray_service.dart';
 
 /// 应用全局状态：外观颜色、锁定、置顶、窗口几何信息。
 ///
@@ -153,11 +154,12 @@ class AppController extends ChangeNotifier {
     _singleInstance = service;
   }
 
-  /// 退出应用：先释放单实例端口，再持久化窗口状态，最后销毁窗口。
+  /// 退出应用：先释放单实例端口，再销毁托盘，持久化窗口状态，最后销毁窗口。
   Future<void> quitApp() async {
     if (_quitting) return;
     _quitting = true;
     await _singleInstance?.dispose();
+    await TrayService.instance.destroy();
     await persistWindowState();
     try {
       await windowManager.destroy();
