@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:tray_manager/tray_manager.dart';
 
 /// 系统托盘服务：工具栏窗口模式的配套入口。
@@ -28,8 +30,11 @@ class TrayService with TrayListener {
     _onShow = onShow;
     _onQuit = onQuit;
     try {
-      // setIcon 接受 flutter_assets 内的资源相对路径（Windows/macOS/Linux 通用）
-      await trayManager.setIcon('assets/app_icon.png');
+      // Windows 的 LoadImage 仅支持 .ico（PNG 会加载失败显示空白图标）；
+      // macOS/Linux 走 PNG。
+      await trayManager.setIcon(
+        Platform.isWindows ? 'assets/app_icon.ico' : 'assets/app_icon.png',
+      );
       trayManager.addListener(this);
       if (tooltip != null) await trayManager.setToolTip(tooltip);
       if (menu != null && menu.isNotEmpty) {
@@ -55,6 +60,17 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseUp() => _onShow?.call();
+
+  // 右键托盘图标：显式弹出菜单（Windows 原生实现不会自动弹出）
+  @override
+  void onTrayIconRightMouseDown() {
+    try {
+      trayManager.popUpContextMenu();
+    } catch (_) {}
+  }
+
+  @override
+  void onTrayIconRightMouseUp() {}
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
