@@ -1,5 +1,6 @@
 ﻿# SimpleClock Flutter run 启动脚本
-# 双击运行 / 右键"使用 PowerShell 运行"（管理员运行可绕过符号链接权限限制）
+# 直接双击 run_windows.bat 运行（.ps1 无法双击直接执行，属 Windows 安全默认）；
+# 若插件符号链接构建失败，请右键 run_windows.bat → "以管理员身份运行"。
 # 项目路径为相对路径（脚本自身位置），任意目录克隆后均可直接运行；
 # Flutter SDK 依次从 FLUTTER_ROOT 环境变量、PATH、常见安装位置定位。
 
