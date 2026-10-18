@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -155,15 +156,31 @@ class AppController extends ChangeNotifier {
   }
 
   /// 退出应用：先释放单实例端口，再销毁托盘，持久化窗口状态，最后销毁窗口。
+  /// 各步骤写时间日志到临时文件（诊断退出延迟用；确认后移除）。
   Future<void> quitApp() async {
     if (_quitting) return;
     _quitting = true;
+    void log(String step) {
+      try {
+        final f = File('${Directory.systemTemp.path}/simple_clock_quit.log');
+        f.writeAsStringSync(
+          '[${DateTime.now().toIso8601String()}] $step\n',
+          mode: FileMode.append,
+        );
+      } catch (_) {}
+    }
+
+    log('quit begin');
     await _singleInstance?.dispose();
+    log('single instance disposed');
     await TrayService.instance.destroy();
+    log('tray destroyed');
     await persistWindowState();
+    log('window state persisted');
     try {
       await windowManager.destroy();
     } catch (_) {}
+    log('window destroyed');
   }
 
   @override

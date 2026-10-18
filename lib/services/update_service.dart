@@ -54,7 +54,18 @@ class UpdateService {
 
   /// 检查是否有新版本。无更新 / 未配置 / 网络失败均返回 null。
   Future<ReleaseInfo?> checkForUpdate() async {
+    void log(String msg) {
+      try {
+        final f = File('${Directory.systemTemp.path}/simple_clock_quit.log');
+        f.writeAsStringSync(
+          '[${DateTime.now().toIso8601String()}] updater: $msg\n',
+          mode: FileMode.append,
+        );
+      } catch (_) {}
+    }
+
     if (!configured) return null;
+    log('check begin');
     final client = _client();
     try {
       final req = await client.getUrl(
@@ -87,6 +98,7 @@ class UpdateService {
       return null;
     } finally {
       client.close();
+      log('check end');
     }
   }
 
