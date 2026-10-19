@@ -29,6 +29,29 @@ constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme"
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
+// 窗口四角圆角半径（像素）。工具窗无边框，用窗口区域裁剪出圆角。
+constexpr int kWindowCornerRadius = 4;
+
+// 通过窗口区域设置圆角：圆角外的区域被裁剪掉（露出桌面）。
+// 注意：圆角 4 个角落不再接收鼠标事件（含边缘缩放），属圆角窗口正常行为。
+void ApplyRoundCorners(HWND hwnd) {
+  RECT rc;
+  if (!GetClientRect(hwnd, &rc)) {
+    return;
+  }
+  const int w = rc.right - rc.left;
+  const int h = rc.bottom - rc.top;
+  if (w <= 0 || h <= 0) {
+    return;
+  }
+  HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1,
+                                kWindowCornerRadius * 2,
+                                kWindowCornerRadius * 2);
+  if (rgn != nullptr) {
+    SetWindowRgn(hwnd, rgn, TRUE);
+  }
+}
+
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
 // Scale helper to convert logical scaler values to physical using passed in
@@ -147,6 +170,7 @@ bool Win32Window::Create(const std::wstring& title,
   }
 
   UpdateTheme(window);
+  ApplyRoundCorners(window);
 
   return OnCreate();
 }
@@ -206,6 +230,8 @@ Win32Window::MessageHandler(HWND hwnd,
         MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
                    rect.bottom - rect.top, TRUE);
       }
+      // 窗口尺寸变化时重建圆角区域
+      ApplyRoundCorners(hwnd);
       return 0;
     }
 
