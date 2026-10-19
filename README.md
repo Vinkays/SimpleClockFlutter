@@ -1,5 +1,7 @@
 # SimpleClock（Flutter 版）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 一个简单的桌面时钟应用，使用 **Flutter** 重写自原 Electron + Vue3 项目（[Vinkays/SimpleClock](https://github.com/Vinkays/SimpleClock)）。
 支持 **Windows / macOS / Linux** 三个桌面平台。
 
