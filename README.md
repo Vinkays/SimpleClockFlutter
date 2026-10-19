@@ -32,7 +32,6 @@
 | --- | --- | --- |
 | 技术栈 | Vue3 + Electron + Vite | Flutter (Dart) |
 | 右键菜单 | 独立无边框子窗口 | 主窗口内浮层（钳制在窗口内，超高可滚动） |
-| 时间更新 | `setInterval`（tick 相位随机，显示滞后最多约 1 秒） | 对齐整秒触发，与系统时间同步 |
 | 字体 | 不支持选择 | 支持选择系统字体（跨平台枚举 + 全局应用） |
 | 界面语言 | 仅中文 | 中文 / English / 跟随系统，可即时切换 |
 | 自动更新 | electron-updater（GitHub Releases） | 自建更新器（GitHub Releases API 检查 → 下载 → 静默安装） |
@@ -111,7 +110,7 @@ git push origin main --tags
 **注意事项**：
 
 - 自动构建会从 tag 提取版本号（`v0.0.2` → `0.0.2`）注入打包脚本，请确保 tag 与版本号一致
-- macOS 产物**未签名**（无 Apple Developer 证书）：本机测试可用，正式分发给用户会被 Gatekeeper 拦截，需自行签名公证（约 99 美元/年证书 + 配置 secrets）
+- macOS 产物**未签名**（无 Apple Developer 证书）
 - Linux 构建在 ubuntu-latest 上安装 GTK 工具链并自动下载 appimagetool；Windows 构建自动通过 chocolatey 安装 Inno Setup
 
 
