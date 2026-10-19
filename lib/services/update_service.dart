@@ -164,15 +164,19 @@ class UpdateService {
   }
 
   /// 启动安装器（Windows：Inno Setup 静默安装；其它平台返回 false）。
+  ///
+  /// 只负责"启动"安装进程，**不等待**安装完成：调用方应在启动后立即退出
+  /// 本应用，让安装器在应用退出后完成文件覆盖（若触发 UAC 提权，由安装器
+  /// 自行处理）。之前用 Process.run 等待导致安装器卡在"应用仍在运行"。
   Future<bool> launchInstaller(File installer) async {
     try {
       if (Platform.isWindows) {
-        final result = await Process.run(
+        await Process.start(
           installer.path,
           const ['/VERYSILENT', '/NORESTART'],
           runInShell: false,
         );
-        return result.exitCode == 0;
+        return true;
       }
       return false;
     } catch (_) {
