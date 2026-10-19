@@ -181,6 +181,10 @@ class AppController extends ChangeNotifier {
       await windowManager.destroy();
     } catch (_) {}
     log('window destroyed');
+    // Flutter Windows 引擎的优雅关闭（PostQuitMessage 之后）在本机实测耗时约
+    // 10 秒。所有清理（单实例端口 / 托盘 / 窗口状态）均已在上面完成，
+    // 这里直接强制终止进程，避免退出延迟。进程终止时 OS 会回收窗口与资源句柄。
+    exit(0);
   }
 
   @override
