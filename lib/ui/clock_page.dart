@@ -370,7 +370,12 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
 
     final s = AppStrings.of(context);
     final confirm = await _askUpdate(info, s);
-    if (confirm != true || !mounted) return;
+    if (confirm != true) {
+      // 「稍后更新」：先恢复被更新弹窗撑大的窗口尺寸
+      await _closeOverlay();
+      return;
+    }
+    if (!mounted) return;
 
     // 优先找 Windows 安装包；其它平台也可用通用下载
     final asset = info.assetFor({'.exe'});
