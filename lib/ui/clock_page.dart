@@ -297,6 +297,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   }
 
   Future<void> _closeOverlay() async {
+    // 更新弹窗显示期间保持窗口撑大与弹窗可见（失焦等场景不得恢复/关闭）
+    if (_updatePromptVisible || _updateProgressVisible) return;
     if (!_menuOpen && !_windowExpanded) return;
     if (mounted) setState(() => _menuOpen = false);
     if (_windowExpanded) {
