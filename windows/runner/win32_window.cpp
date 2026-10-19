@@ -29,32 +29,6 @@ constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme"
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
-// Corner radius (pixels) for the tool window. The window is frameless, so we
-// clip its region to produce rounded corners.
-constexpr int kWindowCornerRadius = 4;
-
-// Apply rounded corners by setting a window region: the area outside the
-// rounded corners is clipped away (desktop shows through). Note that the
-// 4 corner pixels no longer receive mouse input (including edge resize),
-// which is the normal behavior for rounded-corner windows.
-void ApplyRoundCorners(HWND hwnd) {
-  RECT rc;
-  if (!GetClientRect(hwnd, &rc)) {
-    return;
-  }
-  const int w = rc.right - rc.left;
-  const int h = rc.bottom - rc.top;
-  if (w <= 0 || h <= 0) {
-    return;
-  }
-  HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1,
-                                kWindowCornerRadius * 2,
-                                kWindowCornerRadius * 2);
-  if (rgn != nullptr) {
-    SetWindowRgn(hwnd, rgn, TRUE);
-  }
-}
-
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
 // Scale helper to convert logical scaler values to physical using passed in
@@ -173,7 +147,6 @@ bool Win32Window::Create(const std::wstring& title,
   }
 
   UpdateTheme(window);
-  ApplyRoundCorners(window);
 
   return OnCreate();
 }
@@ -233,8 +206,6 @@ Win32Window::MessageHandler(HWND hwnd,
         MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
                    rect.bottom - rect.top, TRUE);
       }
-      // Rebuild the rounded region whenever the window size changes.
-      ApplyRoundCorners(hwnd);
       return 0;
     }
 
