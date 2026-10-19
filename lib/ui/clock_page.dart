@@ -69,6 +69,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   ReleaseInfo? _pendingUpdate;
   bool _updateProgressVisible = false;
   double _updateProgress = 0;
+  bool _updateCancelled = false;
 
   // ---- 轻提示（替代系统通知）----
   String? _toast;
@@ -412,6 +413,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     setState(() {
       _updateProgressVisible = true;
       _updateProgress = 0;
+      _updateCancelled = false;
     });
     File? installer;
     try {
@@ -426,6 +428,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
       if (mounted) setState(() => _updateProgressVisible = false);
     }
     if (!mounted) return;
+    // 用户已取消：丢弃下载结果，不安装不提示
+    if (_updateCancelled) return;
     if (installer == null) {
       await _closeOverlay();
       _showToast(s['updateFailed']!);
@@ -517,7 +521,12 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
-                onPressed: () => setState(() => _updateProgressVisible = false),
+                onPressed: () {
+                  // 取消下载：标记取消 → 关闭进度卡 → 恢复窗口（下载仍在后台收尾，结果被丢弃）
+                  _updateCancelled = true;
+                  setState(() => _updateProgressVisible = false);
+                  _closeOverlay();
+                },
                 child: Text(s['updateLater']!),
               ),
             ],
