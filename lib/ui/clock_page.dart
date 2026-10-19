@@ -366,8 +366,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     _toastTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() => _toast = null);
-        // 恢复被撑大的窗口尺寸
-        _closeOverlay();
+        // 恢复被撑大的窗口尺寸（菜单仍打开时保持，菜单关闭时再统一恢复）
+        if (!_menuOpen) _closeOverlay();
       }
     });
   }
@@ -378,8 +378,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   Future<void> _checkForUpdates() async {
     final info = await _updateService.checkForUpdate();
     if (info == null || !mounted) return;
-    // 更新弹窗显示前先关闭可能已打开的菜单/面板，避免两层弹窗叠加
-    if (_menuOpen) setState(() => _menuOpen = false);
+    // 不主动关闭菜单：更新弹窗渲染在菜单之上，先处理弹窗，菜单保持可用
     await _ensureWindowSize(const Size(400, 320));
     if (!mounted) return;
     setState(() {
@@ -388,11 +387,26 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     });
   }
 
-  /// 「稍后更新」：关闭提示并恢复被撑大的窗口。
+  /// 「稍后更新」：关闭提示层；菜单仍打开时保持窗口与菜单（共享撑大状态）。
   void _updateLater() {
+    _closeUpdateLayer();
+  }
+
+  /// 关闭更新弹窗层：清提示+进度状态；菜单未打开时恢复被撑大的窗口。
+  void _closeUpdateLayer() {
     if (!mounted) return;
-    setState(() => _updatePromptVisible = false);
-    _closeOverlay();
+    setState(() {
+      _updatePromptVisible = false;
+      _updateProgressVisible = false;
+    });
+    // 菜单还开着则保持窗口撑大（菜单面板需要），待菜单关闭时再统一恢复
+    if (!_menuOpen) _closeOverlay();
+  }
+
+  /// 取消下载：标记取消并关闭进度层（菜单打开时保持窗口与菜单）。
+  void _cancelDownload() {
+    _updateCancelled = true;
+    _closeUpdateLayer();
   }
 
   /// 「立即更新」：关闭提示 → 下载安装包（期间保持窗口撑大，避免进度卡溢出）
@@ -408,7 +422,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     // 优先找 Windows 安装包；其它平台也可用通用下载
     final asset = info.assetFor({'.exe'});
     if (asset == null) {
-      await _closeOverlay();
+      if (!_menuOpen) await _closeOverlay();
       _showToast(s['updateFailed']!);
       return;
     }
@@ -435,7 +449,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     // 用户已取消：丢弃下载结果，不安装不提示
     if (_updateCancelled) return;
     if (installer == null) {
-      await _closeOverlay();
+      if (!_menuOpen) await _closeOverlay();
       _showToast(s['updateFailed']!);
       return;
     }
@@ -447,7 +461,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     if (ok && mounted) {
       widget.controller.quitApp();
     } else if (mounted) {
-      await _closeOverlay();
+      if (!_menuOpen) await _closeOverlay();
       _showToast(s['updateFailed']!);
     }
   }
@@ -525,12 +539,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
-                onPressed: () {
-                  // 取消下载：标记取消 → 关闭进度卡 → 恢复窗口（下载仍在后台收尾，结果被丢弃）
-                  _updateCancelled = true;
-                  setState(() => _updateProgressVisible = false);
-                  _closeOverlay();
-                },
+                onPressed: _cancelDownload,
                 child: Text(s['updateLater']!),
               ),
             ],
@@ -571,16 +580,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // 半透明遮罩：点击空白处关闭面板
-                          Positioned.fill(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _closeOverlay,
-                              child: ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.25),
-                              ),
-                            ),
-                          ),
+                          _ModalShade(onTap: _closeOverlay),
                           OverlayPanel(
                             controller: widget.controller,
                             mode: _overlayMode,
@@ -601,21 +601,13 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                         ],
                       ),
                     ),
-                  // 更新弹窗渲染在最顶层（模态）：任何菜单/面板都不可叠加在其上
+                  // 更新弹窗渲染在菜单之上（模态）：先处理弹窗，菜单保持可用
                   if (_updatePromptVisible)
                     Positioned.fill(
                       child: Stack(
                         children: [
-                          // 遮罩：点击等同「稍后更新」（关闭弹窗并恢复窗口）
-                          Positioned.fill(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _updateLater,
-                              child: ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.25),
-                              ),
-                            ),
-                          ),
+                          // 遮罩：点击等同「稍后更新」
+                          _ModalShade(onTap: _updateLater),
                           Center(child: _buildUpdatePromptCard()),
                         ],
                       ),
@@ -624,19 +616,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                     Positioned.fill(
                       child: Stack(
                         children: [
-                          Positioned.fill(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () {
-                                _updateCancelled = true;
-                                setState(() => _updateProgressVisible = false);
-                                _closeOverlay();
-                              },
-                              child: ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.25),
-                              ),
-                            ),
-                          ),
+                          _ModalShade(onTap: _cancelDownload),
                           Center(child: _buildUpdateProgressCard()),
                         ],
                       ),
@@ -724,6 +704,25 @@ class _ScaledClock extends StatelessWidget {
         style: textStyle,
       ),
       size: Size.infinite,
+    );
+  }
+}
+
+/// 半透明模态遮罩（公共组件）：覆盖整个窗口，可选点击回调。
+/// 用于菜单/面板、更新弹窗等所有模态层，保证层级行为一致。
+class _ModalShade extends StatelessWidget {
+  const _ModalShade({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ColoredBox(color: Colors.black.withValues(alpha: 0.25)),
+      ),
     );
   }
 }
