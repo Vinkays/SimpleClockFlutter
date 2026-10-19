@@ -390,12 +390,12 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     _closeOverlay();
   }
 
-  /// 「立即更新」：关闭提示 → 下载安装包 → 启动安装器后退出应用。
+  /// 「立即更新」：关闭提示 → 下载安装包（期间保持窗口撑大，避免进度卡溢出）
+  /// → 启动安装器后退出应用。
   Future<void> _updateNow() async {
     if (!mounted) return;
+    // 提示关闭，但窗口保持撑大状态（供下载进度卡使用，结束后再恢复）
     setState(() => _updatePromptVisible = false);
-    await _closeOverlay();
-    if (!mounted) return;
     final info = _pendingUpdate;
     if (info == null) return;
     final s = AppStrings.of(context);
@@ -403,6 +403,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     // 优先找 Windows 安装包；其它平台也可用通用下载
     final asset = info.assetFor({'.exe'});
     if (asset == null) {
+      await _closeOverlay();
       _showToast(s['updateFailed']!);
       return;
     }
@@ -426,17 +427,19 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     }
     if (!mounted) return;
     if (installer == null) {
+      await _closeOverlay();
       _showToast(s['updateFailed']!);
       return;
     }
 
-    // 启动安装器后退出应用（launchInstaller 只启动不等待）
+    // 启动安装器后退出应用（launchInstaller 只启动不等待；即将退出无需恢复窗口）
     _showToast(s['updateLaunching']!);
     await Future<void>.delayed(const Duration(milliseconds: 600));
     final ok = await _updateService.launchInstaller(installer);
     if (ok && mounted) {
       widget.controller.quitApp();
     } else if (mounted) {
+      await _closeOverlay();
       _showToast(s['updateFailed']!);
     }
   }
