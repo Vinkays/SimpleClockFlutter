@@ -21,5 +21,5 @@ class UpdateConfig {
       'https://raw.githubusercontent.com/Vinkays/SimpleClockFlutter/main/latest.json';
 
   /// 当前应用版本（与 pubspec.yaml 的 version 保持一致）。
-  static const String currentVersion = '0.0.0'; // 临时调低：测试更新弹窗用，测完恢复 0.0.2
+  static const String currentVersion = '0.0.1';
 }
