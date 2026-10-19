@@ -3,6 +3,11 @@
 一个简单的桌面时钟应用，使用 **Flutter** 重写自原 Electron + Vue3 项目（[Vinkays/SimpleClock](https://github.com/Vinkays/SimpleClock)）。
 支持 **Windows / macOS / Linux** 三个桌面平台。
 
+## 图片预览
+![screenshot](/assets/small.jpg)
+![screenshot](/assets/selections.jpg)
+![screenshot](/assets/color-picker.jpg)
+
 ## 功能
 
 - 无边框时钟窗口，实时显示 HH:MM:SS（秒更新对齐系统整秒，时间精确）
