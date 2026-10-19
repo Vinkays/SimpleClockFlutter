@@ -17,7 +17,7 @@
 # 版本号与 pubspec.yaml / update_config.dart / simple_clock.iss 保持一致。
 set -e
 
-VERSION="0.0.4"
+VERSION="0.0.5"
 APP_NAME="SimpleClock"
 APP_PATH="build/macos/Build/Products/Release/${APP_NAME}.app"
 DIST_DIR="dist"
