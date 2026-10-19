@@ -45,12 +45,18 @@ chmod +x "$APPDIR/AppRun"
 
 echo "==> 写入 .desktop 与图标"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
-# 图标：优先用 Linux runner 模板图标；如需自定义，替换 linux/runner/resources/app_icon.png 后重新打包
-ICON_SRC="linux/runner/resources/app_icon.png"
+# 图标：优先仓库通用图标 assets/app_icon.png（Windows/macOS 共用），
+# 其次 Linux runner 模板图标；AppDir 根目录也放一份（appimagetool 双保险查找）
+ICON_SRC="assets/app_icon.png"
+if [ ! -f "$ICON_SRC" ]; then
+  ICON_SRC="linux/runner/resources/app_icon.png"
+fi
 if [ -f "$ICON_SRC" ]; then
   cp "$ICON_SRC" "$APPDIR/usr/share/icons/hicolor/256x256/apps/simple_clock.png"
+  cp "$ICON_SRC" "$APPDIR/simple_clock.png"
+  echo "==> 图标已复制: $ICON_SRC"
 else
-  echo "警告：未找到 $ICON_SRC，将使用不含图标的桌面项" >&2
+  echo "警告：未找到图标，将使用不含图标的桌面项" >&2
 fi
 
 cat > "$APPDIR/${APP_NAME}.desktop" <<EOF
