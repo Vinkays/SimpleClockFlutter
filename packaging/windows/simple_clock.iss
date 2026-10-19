@@ -9,7 +9,7 @@
 
 #define MyAppName "SimpleClock"
 ; 发布新版本时同步更新此版本号（与 pubspec.yaml、update_config.dart 三处一致）
-#define MyAppVersion "0.0.5"
+#define MyAppVersion "0.0.6"
 #define MyAppPublisher "Vinkay"
 #define MyAppExeName "simple_clock.exe"
 
@@ -53,7 +53,9 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; 自动更新走静默安装（/VERYSILENT），安装完成后自动启动新版（不带 skipifsilent，
+; 否则静默模式下会跳过启动；runascurrentuser 避免新版继承安装器的管理员权限）
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall runascurrentuser
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"

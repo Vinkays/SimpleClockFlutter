@@ -419,8 +419,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     if (info == null) return;
     final s = AppStrings.of(context);
 
-    // 优先找 Windows 安装包；其它平台也可用通用下载
-    final asset = info.assetFor({'.exe'});
+    // 按当前平台选择安装包（Windows .exe / macOS .dmg / Linux .AppImage）
+    final asset = _updateService.platformAsset(info);
     if (asset == null) {
       if (!_menuOpen) await _closeOverlay();
       _showToast(s['updateFailed']!);

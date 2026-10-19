@@ -163,11 +163,16 @@ class UpdateService {
     }
   }
 
-  /// 启动安装器（Windows：Inno Setup 静默安装；其它平台返回 false）。
+  /// 启动安装器，返回是否已成功启动安装流程。
   ///
   /// 只负责"启动"安装进程，**不等待**安装完成：调用方应在启动后立即退出
-  /// 本应用，让安装器在应用退出后完成文件覆盖（若触发 UAC 提权，由安装器
-  /// 自行处理）。之前用 Process.run 等待导致安装器卡在"应用仍在运行"。
+  /// 本应用，让安装流程在应用退出后完成（Windows 安装器若触发 UAC 提权，
+  /// 由安装器自行处理；之前用 Process.run 等待导致安装器卡在"应用仍在运行"）。
+  ///
+  /// 平台差异：
+  /// - Windows：Inno Setup 安装包，静默安装（/VERYSILENT /NORESTART）。
+  /// - macOS：dmg → 挂载 → ditto 替换 /Applications/SimpleClock.app → open 新版。
+  /// - Linux：AppImage → install 复制到 ~/.local/bin → 等旧实例退出后启动新版。
   Future<bool> launchInstaller(File installer) async {
     try {
       if (Platform.isWindows) {
@@ -178,10 +183,77 @@ class UpdateService {
         );
         return true;
       }
+      if (Platform.isMacOS) {
+        final script = await _writeTempScript(_macUpdaterScript);
+        await Process.start(
+          '/bin/bash',
+          [script.path, installer.path],
+          runInShell: false,
+        );
+        return true;
+      }
+      if (Platform.isLinux) {
+        final script = await _writeTempScript(_linuxUpdaterScript);
+        await Process.start(
+          '/bin/bash',
+          [script.path, installer.path],
+          runInShell: false,
+        );
+        return true;
+      }
       return false;
     } catch (_) {
       return false;
     }
+  }
+
+  /// 当前平台对应的安装包资产（Windows .exe / macOS .dmg / Linux .AppImage）。
+  ReleaseAsset? platformAsset(ReleaseInfo info) {
+    if (Platform.isWindows) return info.assetFor({'.exe'});
+    if (Platform.isMacOS) return info.assetFor({'.dmg'});
+    if (Platform.isLinux) return info.assetFor({'.appimage'});
+    return null;
+  }
+
+  /// macOS 更新脚本：挂载 dmg → ditto 替换 /Applications 里的旧版 → open 新版。
+  /// 以独立 bash 进程运行，应用退出后继续执行；$1 = 下载的 dmg 路径。
+  static const String _macUpdaterScript = r'''#!/bin/bash
+# SimpleClock updater (macOS)
+DMG="$1"
+APP="/Applications/SimpleClock.app"
+MOUNT_OUT=$(hdiutil attach "$DMG" -nobrowse -readonly -quiet 2>/dev/null) || exit 1
+MOUNT_POINT=$(echo "$MOUNT_OUT" | awk '{print $NF}' | grep '^/Volumes/' | tail -n 1)
+if [ -z "$MOUNT_POINT" ] || [ ! -d "$MOUNT_POINT/SimpleClock.app" ]; then
+  [ -n "$MOUNT_POINT" ] && hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null
+  exit 1
+fi
+# ditto 原子替换旧版（保留权限与签名属性）
+ditto "$MOUNT_POINT/SimpleClock.app" "$APP"
+hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null
+# 旧实例已退出，启动新版
+open "$APP"
+exit 0
+''';
+
+  /// Linux 更新脚本：复制 AppImage 到 ~/.local/bin → 等旧实例退出 → 启动新版。
+  /// 以独立 bash 进程运行，应用退出后继续执行；$1 = 下载的 AppImage 路径。
+  static const String _linuxUpdaterScript = r'''#!/bin/bash
+# SimpleClock updater (Linux)
+SRC="$1"
+DEST="$HOME/.local/bin/SimpleClock.AppImage"
+mkdir -p "$(dirname "$DEST")"
+install -m 755 "$SRC" "$DEST"
+# 等待旧实例完全退出（单实例锁端口释放）后再启动新版
+sleep 3
+nohup "$DEST" >/dev/null 2>&1 &
+exit 0
+''';
+
+  /// 把脚本内容写入临时文件，返回文件引用。
+  Future<File> _writeTempScript(String content) async {
+    final script = File('${Directory.systemTemp.path}/simpleclock_update.sh');
+    await script.writeAsString(content);
+    return script;
   }
 
   HttpClient _client() {
