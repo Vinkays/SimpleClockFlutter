@@ -76,8 +76,15 @@ jobs:
       - name: Create DMG
         shell: bash
         run: |
+          # macOS 使用 BSD sed，-i 语法与 GNU sed 不同，这里用 python3 注入版本号
           VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/^VERSION=\".*\"/VERSION=\"$VERSION\"/" packaging/macos/build_dmg.sh
+          python3 - <<EOF
+          import re
+          p = "packaging/macos/build_dmg.sh"
+          s = open(p, encoding="utf-8").read()
+          s = re.sub(r'^VERSION=".*"', "VERSION=\"$VERSION\"", s, flags=re.M)
+          open(p, "w", encoding="utf-8").write(s)
+          EOF
           bash packaging/macos/build_dmg.sh
 
       - name: Upload DMG to release
