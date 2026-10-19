@@ -64,6 +64,12 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   bool _windowExpanded = false;
   bool _resizingWindow = false;
 
+  // ---- 更新弹窗状态（自绘，不依赖系统 Dialog）----
+  bool _updatePromptVisible = false;
+  ReleaseInfo? _pendingUpdate;
+  bool _updateProgressVisible = false;
+  double _updateProgress = 0;
+
   // ---- 轻提示（替代系统通知）----
   String? _toast;
 
@@ -367,15 +373,30 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   Future<void> _checkForUpdates() async {
     final info = await _updateService.checkForUpdate();
     if (info == null || !mounted) return;
-
-    final s = AppStrings.of(context);
-    final confirm = await _askUpdate(info, s);
-    if (confirm != true) {
-      // 「稍后更新」：等对话框关闭动画结束再恢复窗口，避免缩小窗口时对话框重新布局溢出
-      await _restoreWindowAfterDialog();
-      return;
-    }
+    await _ensureWindowSize(const Size(400, 320));
     if (!mounted) return;
+    setState(() {
+      _pendingUpdate = info;
+      _updatePromptVisible = true;
+    });
+  }
+
+  /// 「稍后更新」：关闭提示并恢复被撑大的窗口。
+  void _updateLater() {
+    if (!mounted) return;
+    setState(() => _updatePromptVisible = false);
+    _closeOverlay();
+  }
+
+  /// 「立即更新」：关闭提示 → 下载安装包 → 启动安装器后退出应用。
+  Future<void> _updateNow() async {
+    if (!mounted) return;
+    setState(() => _updatePromptVisible = false);
+    await _closeOverlay();
+    if (!mounted) return;
+    final info = _pendingUpdate;
+    if (info == null) return;
+    final s = AppStrings.of(context);
 
     // 优先找 Windows 安装包；其它平台也可用通用下载
     final asset = info.assetFor({'.exe'});
@@ -384,36 +405,31 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
       return;
     }
 
-    // 下载并显示进度
+    // 下载并显示进度（自绘，不依赖系统 Dialog）
+    setState(() {
+      _updateProgressVisible = true;
+      _updateProgress = 0;
+    });
     File? installer;
-    final progress = ValueNotifier<double>(0);
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => _UpdateProgressDialog(
-        progress: progress,
-        onCancel: () => progress.value = -1,
-      ),
-    );
-    installer = await _updateService.downloadAsset(
-      asset,
-      onProgress: (p) => progress.value = p,
-    );
+    try {
+      installer = await _updateService.downloadAsset(
+        asset,
+        onProgress: (p) {
+          if (!mounted) return;
+          setState(() => _updateProgress = p);
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _updateProgressVisible = false);
+    }
+    if (!mounted) return;
     if (installer == null) {
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-        await _restoreWindowAfterDialog();
-        _showToast(s['updateFailed']!);
-      }
+      _showToast(s['updateFailed']!);
       return;
     }
 
-    // 启动安装器后退出应用
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
-      await _restoreWindowAfterDialog();
-      _showToast(s['updateLaunching']!);
-    }
+    // 启动安装器后退出应用（launchInstaller 只启动不等待）
+    _showToast(s['updateLaunching']!);
     await Future<void>.delayed(const Duration(milliseconds: 600));
     final ok = await _updateService.launchInstaller(installer);
     if (ok && mounted) {
@@ -423,44 +439,87 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     }
   }
 
-  Future<bool?> _askUpdate(ReleaseInfo info, Map<String, String> s) async {
-    await _ensureWindowSize(const Size(400, 320));
-    if (!mounted) return null;
-    final go = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(s['updateAvailableTitle']!, style: const TextStyle(fontSize: 16)),
-        content: SingleChildScrollView(
-          child: Text(
+  /// 更新提示卡片（自绘：绕开系统 Dialog 在工具窗/失焦/缩放下的渲染异常）。
+  Widget _buildUpdatePromptCard() {
+    final s = AppStrings.of(context);
+    final info = _pendingUpdate;
+    if (info == null) return const SizedBox.shrink();
+    return Container(
+      width: 340,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            s['updateAvailableTitle']!,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Text(
             s['updateAvailableBody']!
                 .replaceFirst('{0}', UpdateConfig.currentVersion)
                 .replaceFirst('{1}', info.tagName),
-            style: const TextStyle(fontSize: 13),
+            style: const TextStyle(fontSize: 13, color: Colors.white70),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(s['updateLater']!),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(s['updateNow']!),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _updateLater,
+                child: Text(s['updateLater']!),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _updateNow,
+                child: Text(s['updateNow']!),
+              ),
+            ],
           ),
         ],
       ),
     );
-    return go;
   }
 
-  /// 更新相关对话框关闭动画结束后再恢复窗口尺寸。
-  ///
-  /// 直接恢复会导致缩小中的窗口与尚未消失的对话框重新布局产生
-  /// RenderFlex overflow（对话框动画约 150~200ms，等待 300ms 稳妥）。
-  Future<void> _restoreWindowAfterDialog() async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    await _closeOverlay();
+  /// 更新下载进度卡片（自绘）。
+  Widget _buildUpdateProgressCard() {
+    final s = AppStrings.of(context);
+    final percent = (_updateProgress.clamp(0.0, 1.0) * 100).round();
+    return Container(
+      width: 340,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            s['updateDownloading']!.replaceFirst('{0}', '$percent'),
+            style: const TextStyle(fontSize: 15),
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: _updateProgress.clamp(0.0, 1.0)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _updateProgressVisible = false),
+                child: Text(s['updateLater']!),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   // ================= 构建 =================
@@ -489,6 +548,33 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                     textColor: widget.controller.textColor,
                     textFontFamily: widget.controller.textFontFamily,
                   ),
+                  if (_updatePromptVisible)
+                    Positioned.fill(
+                      child: Stack(
+                        children: [
+                          // 遮罩：点击不关闭（barrierDismissible 等价于 false）
+                          Positioned.fill(
+                            child: ColoredBox(
+                              color: Colors.black.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          Center(child: _buildUpdatePromptCard()),
+                        ],
+                      ),
+                    ),
+                  if (_updateProgressVisible)
+                    Positioned.fill(
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: ColoredBox(
+                              color: Colors.black.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          Center(child: _buildUpdateProgressCard()),
+                        ],
+                      ),
+                    ),
                   if (_menuOpen)
                     Positioned.fill(
                       child: Stack(
@@ -607,51 +693,6 @@ class _ScaledClock extends StatelessWidget {
         style: textStyle,
       ),
       size: Size.infinite,
-    );
-  }
-}
-
-/// 更新下载进度对话框：进度条实时更新；cancel 时进度置 -1 表示放弃。
-class _UpdateProgressDialog extends StatelessWidget {
-  const _UpdateProgressDialog({
-    required this.progress,
-    required this.onCancel,
-  });
-
-  final ValueNotifier<double> progress;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStrings.of(context);
-    return AlertDialog(
-      title: Text(
-        s['updateDownloading']!.replaceFirst('{0}', '0'),
-        style: const TextStyle(fontSize: 15),
-      ),
-      content: ValueListenableBuilder<double>(
-        valueListenable: progress,
-        builder: (context, value, _) {
-          final percent = (value.clamp(0.0, 1.0) * 100).round();
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              LinearProgressIndicator(value: value < 0 ? null : value.clamp(0.0, 1.0)),
-              const SizedBox(height: 8),
-              Text(
-                s['updateDownloading']!.replaceFirst('{0}', '$percent'),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
-          );
-        },
-      ),
-      actions: [
-        TextButton(
-          onPressed: onCancel,
-          child: Text(s['updateLater']!),
-        ),
-      ],
     );
   }
 }
