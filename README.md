@@ -1,9 +1,6 @@
-# SimpleClock（Flutter 版）
-
-![snapshot](/assets/1.jpg)
-![snapshot](/assets/2.jpg)
-![snapshot](/assets/3.jpg)
-
+<div align="center">
+  <img src="assets/1.jpg" alt="snapshot" />
+</div>
 
 <div align="center">
   <div>
@@ -18,8 +15,9 @@
    <a href="https://github.com/Vinkays/SimpleClockFlutter/releases"><img src="https://img.shields.io/github/v/release/Vinkays/SimpleClockFlutter?include_prereleases"/></a>
   </div>
 </div>
-SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Linux的桌面简易时钟工具，它简洁的设计和实用的功能，为用户提供方便的时钟查看体验。是使用 Flutter 重写自原 Electron + Vue3 项目（[Vinkays/SimpleClock](https://github.com/Vinkays/SimpleClock)）的版本。
- 
+
+SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Linux的桌面简易时钟工具，它简洁的设计和实用的功能，为用户提供方便的时钟查看体验。使用 Flutter 重写 Electron + Vue3 项目 [SimpleClock](https://github.com/Vinkays/SimpleClock)
+
 ## 功能
 
 - 无边框时钟窗口，实时显示 HH:MM:SS
