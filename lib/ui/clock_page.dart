@@ -230,6 +230,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   // ================= 覆盖面板（菜单 / 选色） =================
 
   Future<void> _openMenu(Offset pos) async {
+    // 更新弹窗（模态）显示期间不允许打开菜单/面板
+    if (_updatePromptVisible || _updateProgressVisible) return;
     var supported = Platform.isWindows || Platform.isMacOS || Platform.isLinux;
     var enabled = false;
     if (supported) {
@@ -376,6 +378,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   Future<void> _checkForUpdates() async {
     final info = await _updateService.checkForUpdate();
     if (info == null || !mounted) return;
+    // 更新弹窗显示前先关闭可能已打开的菜单/面板，避免两层弹窗叠加
+    if (_menuOpen) setState(() => _menuOpen = false);
     await _ensureWindowSize(const Size(400, 320));
     if (!mounted) return;
     setState(() {
@@ -562,33 +566,6 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                     textColor: widget.controller.textColor,
                     textFontFamily: widget.controller.textFontFamily,
                   ),
-                  if (_updatePromptVisible)
-                    Positioned.fill(
-                      child: Stack(
-                        children: [
-                          // 遮罩：点击不关闭（barrierDismissible 等价于 false）
-                          Positioned.fill(
-                            child: ColoredBox(
-                              color: Colors.black.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          Center(child: _buildUpdatePromptCard()),
-                        ],
-                      ),
-                    ),
-                  if (_updateProgressVisible)
-                    Positioned.fill(
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: ColoredBox(
-                              color: Colors.black.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          Center(child: _buildUpdateProgressCard()),
-                        ],
-                      ),
-                    ),
                   if (_menuOpen)
                     Positioned.fill(
                       child: Stack(
@@ -621,6 +598,46 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                             onApplyColor: _applyColor,
                             onApplyFont: _applyFont,
                           ),
+                        ],
+                      ),
+                    ),
+                  // 更新弹窗渲染在最顶层（模态）：任何菜单/面板都不可叠加在其上
+                  if (_updatePromptVisible)
+                    Positioned.fill(
+                      child: Stack(
+                        children: [
+                          // 遮罩：点击等同「稍后更新」（关闭弹窗并恢复窗口）
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _updateLater,
+                              child: ColoredBox(
+                                color: Colors.black.withValues(alpha: 0.25),
+                              ),
+                            ),
+                          ),
+                          Center(child: _buildUpdatePromptCard()),
+                        ],
+                      ),
+                    ),
+                  if (_updateProgressVisible)
+                    Positioned.fill(
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                _updateCancelled = true;
+                                setState(() => _updateProgressVisible = false);
+                                _closeOverlay();
+                              },
+                              child: ColoredBox(
+                                color: Colors.black.withValues(alpha: 0.25),
+                              ),
+                            ),
+                          ),
+                          Center(child: _buildUpdateProgressCard()),
                         ],
                       ),
                     ),
