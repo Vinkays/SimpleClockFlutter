@@ -4,6 +4,8 @@
 ;   2. 在项目根目录执行 flutter build windows --release
 ;   3. 用 Inno Setup 编译本脚本（或命令行 iscc simple_clock.iss）
 ; 输出：dist\SimpleClock-setup-<版本>.exe（静默参数 /VERYSILENT 供自动更新使用）
+; 注：中文语言文件 ChineseSimplified.isl 随仓库附带（Languages/ 子目录），
+;     Inno Setup 默认安装不包含该文件。
 
 #define MyAppName "SimpleClock"
 ; 发布新版本时同步更新此版本号（与 pubspec.yaml、update_config.dart 三处一致）
@@ -36,7 +38,7 @@ RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimplified"; MessagesFile: "{#SourcePath}Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
