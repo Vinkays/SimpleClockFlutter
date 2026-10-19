@@ -53,8 +53,47 @@ class UpdateService {
       repo.isNotEmpty;
 
   /// 检查是否有新版本。无更新 / 未配置 / 网络失败均返回 null。
+  ///
+  /// 优先读取 raw.githubusercontent.com 的版本信息文件（CDN、无 API 限流），
+  /// 失败时回退 GitHub API（匿名限流 60 次/小时/IP，仅作兜底）。
   Future<ReleaseInfo?> checkForUpdate() async {
     if (!configured) return null;
+    return await _checkViaLatestJson() ?? await _checkViaApi();
+  }
+
+  Future<ReleaseInfo?> _checkViaLatestJson() async {
+    final client = _client();
+    try {
+      final req = await client.getUrl(Uri.parse(UpdateConfig.latestInfoUrl));
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        await resp.drain<void>();
+        return null;
+      }
+      final body = await resp.transform(utf8.decoder).join();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final version = (json['version'] as String? ?? '').trim();
+      if (version.isEmpty) return null;
+      final assets = <ReleaseAsset>[];
+      final assetMap = json['assets'] as Map<String, dynamic>? ?? const {};
+      assetMap.forEach((platform, url) {
+        final s = url as String? ?? '';
+        if (s.isEmpty) return;
+        assets.add(ReleaseAsset(name: s.split('/').last, downloadUrl: s));
+      });
+      if (assets.isEmpty) return null;
+      final tag = 'v$version';
+      // 只有远端版本比当前新才提示
+      if (compareVersions(_stripV(tag), currentVersion) <= 0) return null;
+      return ReleaseInfo(tagName: tag, assets: assets);
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ReleaseInfo?> _checkViaApi() async {
     final client = _client();
     try {
       final req = await client.getUrl(

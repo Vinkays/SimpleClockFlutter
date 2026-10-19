@@ -371,8 +371,8 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     final s = AppStrings.of(context);
     final confirm = await _askUpdate(info, s);
     if (confirm != true) {
-      // 「稍后更新」：先恢复被更新弹窗撑大的窗口尺寸
-      await _closeOverlay();
+      // 「稍后更新」：等对话框关闭动画结束再恢复窗口，避免缩小窗口时对话框重新布局溢出
+      await _restoreWindowAfterDialog();
       return;
     }
     if (!mounted) return;
@@ -402,7 +402,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     if (installer == null) {
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
-        _closeOverlay();
+        await _restoreWindowAfterDialog();
         _showToast(s['updateFailed']!);
       }
       return;
@@ -411,7 +411,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     // 启动安装器后退出应用
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop();
-      _closeOverlay();
+      await _restoreWindowAfterDialog();
       _showToast(s['updateLaunching']!);
     }
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -424,18 +424,20 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   }
 
   Future<bool?> _askUpdate(ReleaseInfo info, Map<String, String> s) async {
-    await _ensureWindowSize(const Size(360, 240));
+    await _ensureWindowSize(const Size(400, 320));
     if (!mounted) return null;
     final go = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(s['updateAvailableTitle']!, style: const TextStyle(fontSize: 16)),
-        content: Text(
-          s['updateAvailableBody']!
-              .replaceFirst('{0}', UpdateConfig.currentVersion)
-              .replaceFirst('{1}', info.tagName),
-          style: const TextStyle(fontSize: 13),
+        content: SingleChildScrollView(
+          child: Text(
+            s['updateAvailableBody']!
+                .replaceFirst('{0}', UpdateConfig.currentVersion)
+                .replaceFirst('{1}', info.tagName),
+            style: const TextStyle(fontSize: 13),
+          ),
         ),
         actions: [
           TextButton(
@@ -450,6 +452,15 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
       ),
     );
     return go;
+  }
+
+  /// 更新相关对话框关闭动画结束后再恢复窗口尺寸。
+  ///
+  /// 直接恢复会导致缩小中的窗口与尚未消失的对话框重新布局产生
+  /// RenderFlex overflow（对话框动画约 150~200ms，等待 300ms 稳妥）。
+  Future<void> _restoreWindowAfterDialog() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await _closeOverlay();
   }
 
   // ================= 构建 =================

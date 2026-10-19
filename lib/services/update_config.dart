@@ -13,6 +13,13 @@ class UpdateConfig {
   /// GitHub 仓库名。
   static const String repo = 'SimpleClockFlutter';
 
+  /// 版本信息文件地址（raw.githubusercontent.com：CDN 直连、无 API 限流）。
+  /// 内容由 CI 在发布新版本时自动更新（.github/workflows/release.yml 的
+  /// update-latest-json job）。格式：
+  /// { "version": "0.0.2", "assets": { "windows": "...", "macos": "...", "linux": "..." } }
+  static const String latestInfoUrl =
+      'https://raw.githubusercontent.com/Vinkays/SimpleClockFlutter/main/latest.json';
+
   /// 当前应用版本（与 pubspec.yaml 的 version 保持一致）。
-  static const String currentVersion = '0.0.2';
+  static const String currentVersion = '0.0.0'; // 临时调低：测试更新弹窗用，测完恢复 0.0.2
 }

@@ -122,3 +122,36 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/SimpleClock-*.AppImage
+
+  # 三平台构建上传完成后，更新仓库根 latest.json（版本检查走 raw CDN，无 API 限流）
+  update-latest-json:
+    name: Publish latest.json
+    needs: [release-windows, release-macos, release-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Write latest.json
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cat > latest.json <<EOF
+          {
+            "version": "$VERSION",
+            "assets": {
+              "windows": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SimpleClock-setup-$VERSION.exe",
+              "macos": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SimpleClock-$VERSION.dmg",
+              "linux": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SimpleClock-$VERSION.AppImage"
+            }
+          }
+          EOF
+
+      - name: Commit and push latest.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git commit -m "chore: update latest.json to v${GITHUB_REF_NAME#v}" || echo "no changes to commit"
+          git push

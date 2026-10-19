@@ -1,0 +1,8 @@
+{
+  "version": "0.0.2",
+  "assets": {
+    "windows": "https://github.com/Vinkays/SimpleClockFlutter/releases/download/v0.0.2/SimpleClock-setup-0.0.2.exe",
+    "macos": "https://github.com/Vinkays/SimpleClockFlutter/releases/download/v0.0.2/SimpleClock-0.0.2.dmg",
+    "linux": "https://github.com/Vinkays/SimpleClockFlutter/releases/download/v0.0.2/SimpleClock-0.0.2.AppImage"
+  }
+}
