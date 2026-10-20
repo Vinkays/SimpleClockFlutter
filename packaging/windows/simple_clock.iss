@@ -9,7 +9,7 @@
 
 #define MyAppName "简易时钟"
 ; 发布新版本时同步更新此版本号（与 pubspec.yaml、update_config.dart 三处一致）
-#define MyAppVersion "0.0.6"
+#define MyAppVersion "0.0.7"
 #define MyAppPublisher "Vinkay"
 #define MyAppExeName "simple_clock.exe"
 
