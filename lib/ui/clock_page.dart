@@ -489,7 +489,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
           const SizedBox(height: 12),
           Text(
             s['updateAvailableBody']!
-                .replaceFirst('{0}', UpdateConfig.currentVersion)
+                .replaceFirst('{0}', 'v${UpdateConfig.currentVersion}')
                 .replaceFirst('{1}', info.tagName),
             style: const TextStyle(fontSize: 13, color: Colors.white70),
           ),
