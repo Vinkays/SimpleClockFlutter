@@ -61,7 +61,7 @@ fi
 
 cat > "$APPDIR/${APP_NAME}.desktop" <<EOF
 [Desktop Entry]
-Name=${APP_NAME}
+Name=简易时钟
 Comment=Simple desktop clock
 Exec=${EXE_NAME}
 Icon=${EXE_NAME}

@@ -52,6 +52,9 @@ Future<void> main() async {
     // 无边框隐藏标题栏（对应原版 frame: false / titleBarStyle: hidden），
     // window_manager 在隐藏标题栏时保留窗口边缘缩放能力
     titleBarStyle: TitleBarStyle.hidden,
+    // macOS：隐藏窗口左上角红绿灯按钮（关闭/最小化/全屏）；
+    // 关闭走托盘「退出」，不依赖红绿灯
+    windowButtonVisibility: false,
     skipTaskbar: false,
   );
 

@@ -34,7 +34,7 @@ flutter test
 
 | 平台 | 方式 | 命令/脚本 | 产物 |
 |---|---|---|---|
-| Windows | Inno Setup 6 | `flutter build windows --release` → 用 Inno Setup 编译 `packaging/windows/simple_clock.iss`（或 `iscc packaging\windows\simple_clock.iss`） | `dist\SimpleClock-setup-<版本>.exe` |
+| Windows | Inno Setup 6 | `flutter build windows --release` → 用 Inno Setup 编译 `packaging/windows/simple_clock.iss`（或 `iscc packaging\windows\simple_clock.iss`）（packaging/windows/simple_clock.iss里打包的资源来自build生成的build\windows\x64\runner\Release\） | `dist\SimpleClock-setup-<版本>.exe` |
 | macOS | DMG | 在 macOS 上执行 `bash packaging/macos/build_dmg.sh` | `dist/SimpleClock-<版本>.dmg` |
 | Linux | AppImage | 在 Linux 上执行 `bash packaging/linux/build_appimage.sh` | `dist/SimpleClock-<版本>.AppImage` |
 

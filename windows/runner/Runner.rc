@@ -1,4 +1,4 @@
-// Microsoft Visual C++ generated resource script.
+﻿// Microsoft Visual C++ generated resource script.
 //
 #pragma code_page(65001)
 #include "resource.h"
@@ -95,7 +95,7 @@ BEGIN
             VALUE "InternalName", "simple_clock" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 Vinkay. All rights reserved." "\0"
             VALUE "OriginalFilename", "simple_clock.exe" "\0"
-            VALUE "ProductName", "SimpleClock" "\0"
+            VALUE "ProductName", "简易时钟" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

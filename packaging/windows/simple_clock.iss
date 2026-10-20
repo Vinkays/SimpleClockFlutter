@@ -1,4 +1,4 @@
-; SimpleClock - Windows 安装脚本（Inno Setup 6）
+﻿; SimpleClock - Windows 安装脚本（Inno Setup 6）
 ; 使用前：
 ;   1. 安装 Inno Setup 6（https://jrsoftware.org/isinfo.php）
 ;   2. 在项目根目录执行 flutter build windows --release
@@ -7,7 +7,7 @@
 ; 注：中文语言文件 ChineseSimplified.isl 随仓库附带（Languages/ 子目录），
 ;     Inno Setup 默认安装不包含该文件。
 
-#define MyAppName "SimpleClock"
+#define MyAppName "简易时钟"
 ; 发布新版本时同步更新此版本号（与 pubspec.yaml、update_config.dart 三处一致）
 #define MyAppVersion "0.0.6"
 #define MyAppPublisher "Vinkay"
@@ -19,7 +19,7 @@ AppId={{38B34C4C-CFF9-4CA6-AEC6-7B4EA06660A7}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\SimpleClock
 DefaultGroupName={#MyAppName}
 ; 32/64 位通用安装目录（Program Files）
 ArchitecturesInstallIn64BitMode=x64compatible
