@@ -104,6 +104,11 @@ class AppController extends ChangeNotifier {
     _isAlwaysOnTop = !_isAlwaysOnTop;
     try {
       await windowManager.setAlwaysOnTop(_isAlwaysOnTop);
+      if (Platform.isMacOS) {
+        // macOS 多桌面：置顶窗口默认只在当前 Space 生效，切到新桌面
+        // 会失去置顶；同步设置"所有桌面可见"（canJoinAllSpaces）
+        await windowManager.setVisibleOnAllWorkspaces(_isAlwaysOnTop);
+      }
     } catch (_) {}
     store.setIsAlwaysOnTop(_isAlwaysOnTop);
     notifyListeners();

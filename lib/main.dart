@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:tray_manager/tray_manager.dart';
@@ -68,6 +70,11 @@ Future<void> main() async {
       await windowManager.center();
     }
     await windowManager.setAlwaysOnTop(controller.isAlwaysOnTop);
+    if (Platform.isMacOS && controller.isAlwaysOnTop) {
+      // macOS 多桌面：置顶窗口只在当前 Space 生效，启动恢复时
+      // 同步"所有桌面可见"（canJoinAllSpaces），保证各桌面均置顶
+      await windowManager.setVisibleOnAllWorkspaces(true);
+    }
     await windowManager.setResizable(!controller.isLocked);
     // 拦截默认关闭：先持久化窗口状态，再真正销毁窗口
     await windowManager.setPreventClose(true);
