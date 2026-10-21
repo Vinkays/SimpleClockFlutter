@@ -75,6 +75,12 @@ Type: dirifempty; Name: "{userprograms}\SimpleClock"
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"
 
+[UninstallRun]
+; 应用关闭窗口时隐藏到系统托盘（进程不退出），Inno 的 CloseApplications
+; 发 WM_CLOSE 无法结束它 → 卸载前必须强制结束进程，否则核心文件被占用
+; 删除失败，残留 simple_clock.exe / DLL 且桌面窗口不消失
+Filename: "{sys}\taskkill.exe"; Parameters: "/IM {#MyAppExeName} /F"; Flags: runhidden; RunOnceId: "KillAppBeforeUninstall"
+
 [Code]
 // 桌面快捷方式创建条件：
 //  - 升级场景：桌面已存在旧版快捷方式（英文 SimpleClock 或中文 简易时钟），
