@@ -35,6 +35,15 @@ class ClockPage extends StatefulWidget {
 class _ClockPageState extends State<ClockPage> with WindowListener {
   static const double _resizeEdgeThreshold = 4;
 
+  // 更新弹窗固定字体：不跟随用户自选字体。
+  // Windows 用微软雅黑，其余平台经 fontFamilyFallback 依次回退系统字体。
+  static const String _dialogFontFamily = 'Microsoft YaHei';
+  static const List<String> _dialogFontFallback = [
+    'PingFang SC',
+    'Noto Sans CJK SC',
+    'WenQuanYi Micro Hei',
+  ];
+
   /// 覆盖面板所需的最小窗口尺寸（当前窗口小于此值时临时撑大，关闭后恢复）。
   static const Size _menuMinWindow = Size(240, 300);
   static const Size _pickerMinWindow = Size(320, 440);
@@ -96,6 +105,25 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
       const Duration(seconds: 4),
       _checkForUpdates,
     );
+    // 首次启动默认开启开机自启动（写标记后尊重用户后续选择）
+    _initAutoStartDefault();
+  }
+
+  /// 首次启动默认开启开机自启动。
+  ///
+  /// 仅当从未初始化过时调用一次 [AutoLaunchService.enable]；
+  /// 成功后写入标记，之后用户在菜单中手动移除/重新开启的选择都会被尊重，
+  /// 不会每次启动都强制重置。
+  Future<void> _initAutoStartDefault() async {
+    if (widget.controller.store.isAutoStartInitialized) return;
+    try {
+      final ok = await _autoLaunch.enable();
+      if (ok) {
+        await widget.controller.store.setAutoStartInitialized(true);
+      }
+    } catch (_) {
+      // 平台不支持或系统限制：保持静默，下次启动再尝试
+    }
   }
 
   @override
@@ -471,44 +499,116 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     final s = AppStrings.of(context);
     final info = _pendingUpdate;
     if (info == null) return const SizedBox.shrink();
-    return Container(
-      width: 340,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
+    return Material(
+      color: const Color(0xFF2A2A2A),
+      // 模态弹窗必须包 Material：提供正规 DefaultTextStyle/dialogTheme
+      // 上下文，按钮与文字的主题解析走标准路径（裸 Container 缺失该上下文）
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            s['updateAvailableTitle']!,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: 340,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          // 窗口过矮时允许内部滚动，避免 RenderFlex overflow
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 标题前加灯泡 icon（尺寸 22 > 标题 16，视觉上更突出）
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lightbulb_outline, size: 22, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        s['updateAvailableTitle']!,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          // 深灰自绘底上固定白字，不继承浅色主题黑字
+                          color: Colors.white,
+                          // 固定系统字体，不跟随用户自选字体
+                          fontFamily: _dialogFontFamily,
+                          fontFamilyFallback: _dialogFontFallback,
+                          // 不设任何装饰线（无删除线/下划线）
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // 正文：版本号单独加大字号，比其余文字显眼一点
+                Builder(builder: (context) {
+                  final template = s['updateAvailableBody']!;
+                  final curVer = 'v${UpdateConfig.currentVersion}';
+                  final newVer = info.tagName;
+                  // 按 {0} / {1} 占位符拆分模板，保证中英文均可用
+                  final seg0 = template.split('{0}');
+                  final seg1 = seg0[1].split('{1}');
+                  const baseStyle = TextStyle(
+                    fontSize: 13,
+                    color: Colors.white,
+                    // 固定系统字体，不跟随用户自选字体
+                    fontFamily: _dialogFontFamily,
+                    fontFamilyFallback: _dialogFontFallback,
+                  );
+                  const verStyle = TextStyle(
+                    fontSize: 15,
+                    color: Colors.white,
+                    fontFamily: _dialogFontFamily,
+                    fontFamilyFallback: _dialogFontFallback,
+                  );
+                  return Text.rich(
+                    TextSpan(
+                      style: baseStyle,
+                      children: [
+                        TextSpan(text: seg0[0]),
+                        TextSpan(text: curVer, style: verStyle),
+                        TextSpan(text: seg1[0]),
+                        TextSpan(text: newVer, style: verStyle),
+                        TextSpan(text: seg1[1]),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _updateLater,
+                      child: Text(
+                        s['updateLater']!,
+                        style: const TextStyle(
+                          // 固定系统字体，不跟随用户自选字体
+                          fontFamily: _dialogFontFamily,
+                          fontFamilyFallback: _dialogFontFallback,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _updateNow,
+                      child: Text(
+                        s['updateNow']!,
+                        style: const TextStyle(
+                          // 固定系统字体，不跟随用户自选字体
+                          fontFamily: _dialogFontFamily,
+                          fontFamilyFallback: _dialogFontFallback,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            s['updateAvailableBody']!
-                .replaceFirst('{0}', 'v${UpdateConfig.currentVersion}')
-                .replaceFirst('{1}', info.tagName),
-            style: const TextStyle(fontSize: 13, color: Colors.white70),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _updateLater,
-                child: Text(s['updateLater']!),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _updateNow,
-                child: Text(s['updateNow']!),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -517,34 +617,56 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
   Widget _buildUpdateProgressCard() {
     final s = AppStrings.of(context);
     final percent = (_updateProgress.clamp(0.0, 1.0) * 100).round();
-    return Container(
-      width: 340,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
+    return Material(
+      color: const Color(0xFF2A2A2A),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            s['updateDownloading']!.replaceFirst('{0}', '$percent'),
-            style: const TextStyle(fontSize: 15),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: 340,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          // 窗口过矮时允许内部滚动，避免 RenderFlex overflow 黄黑条纹
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  s['updateDownloading']!.replaceFirst('{0}', '$percent'),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    // 固定系统字体，不跟随用户自选字体
+                    fontFamily: _dialogFontFamily,
+                    fontFamilyFallback: _dialogFontFallback,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(value: _updateProgress.clamp(0.0, 1.0)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _cancelDownload,
+                      child: Text(
+                        s['updateLater']!,
+                        style: const TextStyle(
+                          // 固定系统字体，不跟随用户自选字体
+                          fontFamily: _dialogFontFamily,
+                          fontFamilyFallback: _dialogFontFallback,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          LinearProgressIndicator(value: _updateProgress.clamp(0.0, 1.0)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _cancelDownload,
-                child: Text(s['updateLater']!),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -622,29 +744,36 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                       ),
                     ),
                   if (_toast != null)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 10,
+                    Positioned.fill(
                       child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          constraints: const BoxConstraints(maxWidth: 280),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
+                        // 与更新弹窗同理：裸 Container+Text 缺 Material 上下文
+                        // 会触发渲染异常（双划线），必须包 Material 提供
+                        // DefaultTextStyle 标准解析路径
+                        child: Material(
+                          color: Colors.black.withValues(alpha: 0.7),
+                          shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          // 窗口仍过小时文字按比例缩小，保证完整可见
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              _toast!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
+                          clipBehavior: Clip.antiAlias,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: 280,
+                              ),
+                              // 窗口仍过小时文字按比例缩小，保证完整可见
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _toast!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

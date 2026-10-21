@@ -15,6 +15,7 @@ class StoreService {
   static const String kTextFontFamily = 'appearance.textFontFamily';
   static const String kLanguage = 'language';
   static const String kSingleInstancePort = 'singleInstancePort';
+  static const String kAutoStartInitialized = 'autoStartInitialized';
 
   SharedPreferences? _prefs;
 
@@ -100,5 +101,14 @@ class StoreService {
 
   Future<void> setSingleInstancePort(int port) async {
     await _prefs?.setInt(kSingleInstancePort, port);
+  }
+
+  /// 是否已执行过「首次启动默认开启自启动」。
+  /// 标记写入后不再干预用户后续在菜单中的开启/移除选择。
+  bool get isAutoStartInitialized =>
+      _prefs?.getBool(kAutoStartInitialized) ?? false;
+
+  Future<void> setAutoStartInitialized(bool value) async {
+    await _prefs?.setBool(kAutoStartInitialized, value);
   }
 }
