@@ -28,6 +28,40 @@ flutter run -d windows   # 或 -d macos / -d linux
 flutter test
 ```
 
+## 更新版本号
+
+版本号共 5 处：`pubspec.yaml` 的 `version`、`lib/services/update_config.dart` 的 `currentVersion`、`packaging/windows/simple_clock.iss` 的 `MyAppVersion`、`packaging/macos/build_dmg.sh` 的 `VERSION`、`packaging/linux/build_appimage.sh` 的 `VERSION`。
+
+**`latest.json` 不要手动改**，它由 GitHub Actions 自动生成。`release.yml` 末尾的 `update-latest-json` job 会在三平台产物全部就绪后自动重写它并 push 回 main。手动改会造成"用户先收到更新提示、安装包还未就绪"的窗口期。
+
+### 一键脚本更新版本 
+
+按发布者平台选择更新方式：
+
+**Windows 发布者（推荐）**——一键脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\set_version.ps1 版本号（例如 0.0.2，下同）
+```
+
+
+**macOS / Linux 发布者**——两种方式任选：
+
+方式一：安装 PowerShell Core（pwsh）后运行**同一个脚本**：
+
+```sh
+brew install powershell     # macOS
+snap install powershell     # Linux
+pwsh tools/set_version.ps1 版本号
+```
+
+方式二：**只改 2 处**，其余 3 处由 GitHub Actions 从 tag 自动注入：
+
+- `pubspec.yaml` 的 `version`
+- `lib/services/update_config.dart` 的 `currentVersion`
+
+（`simple_clock.iss` / `build_dmg.sh` / `build_appimage.sh` 的版本号在 `release.yml` 构建时由 tag 自动替换，本地无需改动。）
+
 ## 打包
 
 ### 各平台安装包（GitHub Releases 分发）
@@ -49,9 +83,7 @@ flutter test
 
 **发布新版本步骤**：
 
-1. 同步版本号：`pubspec.yaml` 的 `version`、`lib/services/update_config.dart` 的 `currentVersion`、`packaging/windows/simple_clock.iss` 的 `MyAppVersion`、`packaging/macos/build_dmg.sh` 的 `VERSION`、`packaging/linux/build_appimage.sh` 的 `VERSION`
-2. 打 tag 并推送（触发下方 GitHub Actions 自动构建发布）或按上表手动打包上传到 GitHub Releases，**tag 形如 `v0.0.2`**（自动更新按 tag 比对版本）
-3. 仓库信息已配置在 `lib/services/update_config.dart`（`Vinkays` / `SimpleClockFlutter`），仓库不存在或版本不更新时应用不会提示
+
 
 ### 一键发布（GitHub Actions）
 
@@ -61,7 +93,7 @@ flutter test
 **发版流程（以后每次）**：
 
 ```sh
-# 1. 同步五处版本号（见上），例如都改为 0.0.2
+# 1. 按上节更新版本号（Windows 用脚本 / macOS、Linux 用 pwsh 或只改两处），例如 0.0.2
 # 2. 提交并打 tag
 git add -A && git commit -m "v0.0.2"
 git tag v0.0.2

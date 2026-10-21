@@ -74,5 +74,10 @@ packaging/
 ├── macos/build_dmg.sh            # DMG 打包脚本
 └── linux/build_appimage.sh       # AppImage 打包脚本
 ```
+
+## 构建与发布
+
+构建前，请务必阅读[HELP.md](/HELP.md) 文档，了解如何构建与发布不同平台的安装包。
+
 ## License
 SimpleClockFlutter is licensed under the MIT License - see the [LICENSE](/LICENSE) file for details
