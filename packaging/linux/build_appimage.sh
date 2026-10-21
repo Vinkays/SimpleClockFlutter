@@ -11,7 +11,7 @@
 # AppImage 格式配合自建更新器 / AppImageUpdate 可实现自动更新。
 set -e
 
-VERSION="0.0.8"
+VERSION="0.0.9"
 APP_NAME="SimpleClock"
 EXE_NAME="simple_clock"
 BUNDLE_DIR="build/linux/x64/release/bundle"
