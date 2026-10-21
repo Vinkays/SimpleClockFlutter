@@ -16,7 +16,7 @@
   </div>
 </div>
 
-SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Linux的桌面简易时钟工具，它简洁的设计和实用的功能，为用户提供方便的时钟查看体验。使用 Flutter 重写 Electron + Vue3 项目 [SimpleClock](https://github.com/Vinkays/SimpleClock)
+SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Linux的桌面简易时钟工具，它简洁的设计和实用的功能，为用户提供方便的时钟查看体验。使用 Flutter 重写 Electron + Vue3 项目 [Vinkays/SimpleClock](https://github.com/Vinkays/SimpleClock)
 
 ## 功能
 
