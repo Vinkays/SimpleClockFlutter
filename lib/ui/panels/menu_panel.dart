@@ -19,6 +19,7 @@ class MenuPanel extends StatefulWidget {
     required this.onPickBgColor,
     required this.onPickFont,
     required this.onPickLanguage,
+    required this.onPickTimeFormat,
     required this.onPickRemindInterval,
     required this.onAbout,
     required this.onToggleDebugLog,
@@ -36,6 +37,9 @@ class MenuPanel extends StatefulWidget {
   final VoidCallback onPickBgColor;
   final VoidCallback onPickFont;
   final VoidCallback onPickLanguage;
+
+  /// 打开「时间制式」面板。
+  final VoidCallback onPickTimeFormat;
   final VoidCallback onPickRemindInterval;
 
   /// 打开「关于我们」面板。
@@ -94,6 +98,19 @@ class _MenuPanelState extends State<MenuPanel> {
         return s['langEnglish']!;
       default:
         return s['langFollowSystem']!;
+    }
+  }
+
+  /// 当前时间制式在菜单「时间制式」行右侧的显示。
+  String get _currentTimeFormatLabel {
+    final s = AppStrings.of(context);
+    switch (widget.controller.timeFormat) {
+      case '12h':
+        return s['time12Hour']!;
+      case '24h':
+        return s['time24Hour']!;
+      default:
+        return s['timeFollowSystem']!;
     }
   }
 
@@ -168,6 +185,20 @@ class _MenuPanelState extends State<MenuPanel> {
               ),
             ),
             onTap: widget.onPickLanguage,
+          ),
+          _MenuRow(
+            label: s['menuTimeFormat']!,
+            fg: controller.textColor,
+            bg: controller.bgColor,
+            height: itemHeight,
+            trailing: Text(
+              _currentTimeFormatLabel,
+              style: TextStyle(
+                fontSize: 12,
+                color: controller.textColor.withValues(alpha: 0.7),
+              ),
+            ),
+            onTap: widget.onPickTimeFormat,
           ),
           if (widget.autoLaunchSupported)
             _MenuRow(

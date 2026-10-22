@@ -13,11 +13,10 @@
 
 ## 时钟显示跟随系统 12/24 小时制
 
-- **状态**：待办，评估后再决定是否实施
+- **状态**：已完成（0.0.12）
 - **背景**：当前时钟固定 24 小时制（`clock_page.dart` 用 `now.hour` 直接取 0-23）；用户系统若为 12 小时制则显示习惯不一致。Flutter 无直接 API 读取系统 12/24 设置，需平台原生检测
-- **方案**：
-  - [ ] 平台检测：Windows 注册表 `HKCU\Control Panel\International\sTimeFormat`（含 `h` = 12 小时制，`H` = 24 小时制）；macOS `NSUserDefaults` 的 `AppleICUForce24HourTime` / `AppleICUForce12HourTime`（均无则跟随 locale）；Linux locale `LC_TIME` + 桌面环境设置（GNOME dconf `clock-format`）
-  - [ ] 设置项：「跟随系统 / 12 小时制 / 24 小时制」三选，默认跟随系统，检测失败回落固定格式
-  - [ ] `clock_page.dart` 显示逻辑按选择格式化（12 小时制补 AM/PM）
-- **触发条件**：评估后再定（用户对 UI 变化敏感，避免强制改变现有用户习惯；近似方案 `Platform.localeName` + 地区惯例映射不准确，不采用）
-- **涉及文件**：`lib/ui/clock_page.dart`、`lib/controllers/app_controller.dart`（设置项）、Windows/macOS/Linux 原生读取
+- **方案**（已实施）：
+  - [x] 平台检测：Windows 注册表 `HKCU\Control Panel\International\sTimeFormat`（含 `h` = 12 小时制，`H` = 24 小时制）；macOS `NSUserDefaults` 的 `AppleICUForce24HourTime` / `AppleICUForce12HourTime`（均无则读取 `AppleICUDateFormatStrings`）；Linux GNOME dconf `clock-format`（`12h`/`24h`）+ `LC_TIME` 常用 12 小时制区域匹配
+  - [x] 设置项：「跟随系统 / 12 小时制 / 24 小时制」三选，默认跟随系统，检测失败回落 24 小时制（保持既有显示习惯）
+  - [x] `clock_page.dart` 显示逻辑按选择格式化：12 小时制小时转 1-12 并在秒数后显示 AM/PM（与数字同字号、同拉伸）；24 小时制不显示 AM/PM
+- **涉及文件**：`lib/ui/clock_page.dart`、`lib/controllers/app_controller.dart`、`lib/services/time_format_service.dart`（新增）、`lib/services/store_service.dart`、`lib/ui/widgets/scaled_clock.dart`、`lib/ui/state/clock_ticker.dart`、`lib/ui/panels/time_format_panel.dart`（新增）、`lib/ui/panels/menu_panel.dart`、`lib/ui/state/overlay_controller.dart`、`lib/services/app_strings.dart`

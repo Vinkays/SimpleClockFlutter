@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 /// 再按 `scaleX = 可用宽 / 文本宽`、`scaleY = 可用高 / 文本高` 非等比拉伸
 /// （与原版 transform: scale(scaleX, scaleY) 行为一致）。
 ///
+/// 12 小时制时（[amPm] 非空）AM/PM 直接拼在秒数后面（如 `11:11:44 PM`），
+/// 与数字同字号、同拉伸；24 小时制（[amPm] 为 null）不追加。
+///
 /// 之所以用 CustomPaint 而不是 widget 组合：
 /// - 不受窗口宽度约束影响，文本永远单行（不会换行/分行）；
 /// - 不参与布局溢出检测，窗口再小也不会出现 overflowed 警告；
@@ -21,6 +24,7 @@ class ScaledClock extends StatelessWidget {
     required this.second,
     required this.textColor,
     this.textFontFamily,
+    this.amPm,
   });
 
   final String hour;
@@ -31,6 +35,9 @@ class ScaledClock extends StatelessWidget {
   /// 文字字体（null 表示系统默认字体）。
   final String? textFontFamily;
 
+  /// 12 小时制的 AM/PM 文案（'AM' | 'PM'；null 表示 24 小时制，不显示）。
+  final String? amPm;
+
   @override
   Widget build(BuildContext context) {
     final textStyle = TextStyle(
@@ -40,9 +47,11 @@ class ScaledClock extends StatelessWidget {
       fontFamily: textFontFamily,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
+    // AM/PM 拼在秒数之后，与数字同字号、随文本一起拉伸
+    final suffix = amPm == null ? '' : ' $amPm';
     return CustomPaint(
       painter: ClockTextPainter(
-        text: '$hour:$minute:$second',
+        text: '$hour:$minute:$second$suffix',
         style: textStyle,
       ),
       size: Size.infinite,

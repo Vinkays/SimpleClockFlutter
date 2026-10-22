@@ -69,6 +69,11 @@ mixin OverlayMixin on WindowResizeMixin, ModalMixin, ToastMixin {
     _ensureWindowSize(_menuMinWindow);
   }
 
+  void _switchTimeFormatPicker() {
+    setState(() => _overlayMode = OverlayMode.timeFormat);
+    _ensureWindowSize(_menuMinWindow);
+  }
+
   void _switchRemindIntervalPicker() {
     setState(() => _overlayMode = OverlayMode.remindInterval);
     _ensureWindowSize(_menuMinWindow);

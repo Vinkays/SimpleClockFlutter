@@ -14,6 +14,7 @@ class StoreService {
   static const String kAppearanceText = 'appearance.textColor';
   static const String kTextFontFamily = 'appearance.textFontFamily';
   static const String kLanguage = 'language';
+  static const String kTimeFormat = 'timeFormat';
   static const String kSingleInstancePort = 'singleInstancePort';
   static const String kAutoStartInitialized = 'autoStartInitialized';
   static const String kUpdateRemindHours = 'update.remindIntervalHours';
@@ -98,6 +99,13 @@ class StoreService {
 
   Future<void> setLanguage(String language) async {
     await _prefs?.setString(kLanguage, language);
+  }
+
+  /// 保存的时间制式（'system' | '12h' | '24h'；null 视为跟随系统）。
+  String get timeFormat => _prefs?.getString(kTimeFormat) ?? 'system';
+
+  Future<void> setTimeFormat(String value) async {
+    await _prefs?.setString(kTimeFormat, value);
   }
 
   /// 单实例锁使用的端口号（null 表示尚未记录）。

@@ -27,6 +27,7 @@ SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Lin
   - 文字颜色 / 背景色（HSV 颜色选择器 + 预设色块）
   - 字体：列出**本机已安装字体**，带搜索框与实时预览
   - 语言：跟随系统 / 中文 / English
+  - 时间制式：跟随系统（自动检测平台设置）/ 12 小时制（秒数后显示 AM/PM）/ 24 小时制
   - 锁定（禁止拖动与缩放）/ 解除锁定
   - 置顶 / 移除置顶
   - 设置 / 移除开机自启动（首次启动默认开启）
@@ -67,6 +68,7 @@ lib/
 │   └── app_controller.dart       # 全局状态：外观 / 锁定 / 置顶 / 窗口几何 / 字体 / 语言 / 调试日志
 ├── services/
 │   ├── store_service.dart        # 持久化存储（shared_preferences：外观、窗口、冷却、日志开关）
+│   ├── time_format_service.dart  # 系统时间制式检测（Windows 注册表 / macOS defaults / Linux gsettings）
 │   ├── auto_launch_service.dart  # 开机自启动（launch_at_startup）
 │   ├── font_service.dart         # 系统字体枚举（Windows 注册表 / macOS 目录 / Linux fc-list）
 │   ├── single_instance_service.dart  # 单实例锁（随机端口 + 端口号持久化）

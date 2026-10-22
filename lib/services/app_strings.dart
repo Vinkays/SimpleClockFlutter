@@ -22,6 +22,7 @@ class AppStrings {
     'menuRemoveAutoStart': '移除开机自启动',
     'menuQuit': '退出程序',
     'menuLanguage': '语言',
+    'menuTimeFormat': '时间制式',
     'menuRemindInterval': '更新提醒间隔',
     'menuDebugLog': '调试日志',
     'debugLogOn': '开',
@@ -70,6 +71,13 @@ class AppStrings {
     'langChinese': '中文',
     'langChineseDesc': '简体中文',
     'langEnglish': 'English',
+    // 时间制式面板
+    'timeFollowSystem': '跟随系统',
+    'timeFollowSystemDesc': '自动使用系统时间制式',
+    'time12Hour': '12 小时制',
+    'time12HourDesc': '显示 AM/PM',
+    'time24Hour': '24 小时制',
+    'time24HourDesc': '不显示 AM/PM',
     // Toast
     'autoStartSuccess': '设置开机自启动成功',
     'autoStartRemoveSuccess': '移除开机自启动成功',
@@ -99,6 +107,7 @@ class AppStrings {
     'menuRemoveAutoStart': 'Remove Auto Start',
     'menuQuit': 'Quit',
     'menuLanguage': 'Language',
+    'menuTimeFormat': 'Time Format',
     'menuRemindInterval': 'Update Reminder',
     'menuDebugLog': 'Debug Log',
     'debugLogOn': 'On',
@@ -147,6 +156,13 @@ class AppStrings {
     'langChinese': 'Chinese (Simplified)',
     'langChineseDesc': 'Simplified Chinese',
     'langEnglish': 'English',
+    // Time format panel
+    'timeFollowSystem': 'Follow System',
+    'timeFollowSystemDesc': 'Use system time format',
+    'time12Hour': '12-Hour',
+    'time12HourDesc': 'Show AM/PM',
+    'time24Hour': '24-Hour',
+    'time24HourDesc': 'Hide AM/PM',
     // Toast
     'autoStartSuccess': 'Auto start enabled',
     'autoStartRemoveSuccess': 'Auto start removed',

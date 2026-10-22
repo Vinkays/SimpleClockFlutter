@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 import '../services/log_service.dart';
 import '../services/single_instance_service.dart';
 import '../services/store_service.dart';
+import '../services/time_format_service.dart';
 import '../services/tray_service.dart';
 
 /// 应用全局状态：外观颜色、锁定、置顶、窗口几何信息。
@@ -15,9 +16,16 @@ import '../services/tray_service.dart';
 /// 状态变化通过 [ChangeNotifier] 通知界面刷新；
 /// 窗口系统调用集中在 [windowManager]（window_manager 包）。
 class AppController extends ChangeNotifier {
-  AppController(this.store);
+  AppController(
+    this.store, {
+    Future<bool?> Function()? detectSystem12Hour,
+  }) : _detectSystem12Hour =
+            detectSystem12Hour ?? TimeFormatService.detectSystem12Hour;
 
   final StoreService store;
+
+  /// 系统时间制式检测函数（测试可注入桩实现，默认走 [TimeFormatService]）。
+  final Future<bool?> Function() _detectSystem12Hour;
 
   /// 单实例锁服务（由 main 启动时挂载，退出时释放端口）。
   SingleInstanceService? _singleInstance;
@@ -39,6 +47,26 @@ class AppController extends ChangeNotifier {
   /// 界面语言：'system'（跟随系统）| 'zh' | 'en'。
   String _language = 'system';
   String get language => _language;
+
+  /// 时间制式：'system'（跟随系统）| '12h' | '24h'。
+  String _timeFormat = 'system';
+  String get timeFormat => _timeFormat;
+
+  /// 系统检测到的默认时间制式（true=12 小时制，false=24 小时制，null=检测失败）。
+  bool? _system12Hour;
+  bool? get system12Hour => _system12Hour;
+
+  /// 实际生效的是否使用 12 小时制（决定 AM/PM 的显示）。
+  ///
+  /// 「跟随系统」时用启动时的检测结果；检测失败回落 24 小时制
+  /// （保持既有显示习惯，不强制改变用户已熟悉的界面）。
+  bool get effective12Hour {
+    return switch (_timeFormat) {
+      '12h' => true,
+      '24h' => false,
+      _ => _system12Hour ?? false,
+    };
+  }
 
   /// 「更新提醒间隔」小时数（「稍后」后该版本冷却多久再提示）。
   int _updateRemindHours = 48;
@@ -73,6 +101,8 @@ class AppController extends ChangeNotifier {
     _textColor = store.textColor ?? const Color(0xFF000000);
     _textFontFamily = store.textFontFamily;
     _language = store.language ?? 'system';
+    _timeFormat = store.timeFormat;
+    _system12Hour = await _detectSystem12Hour();
     _updateRemindHours = store.updateRemindHours;
     _debugLogEnabled = store.debugLogEnabled;
     LogService.instance.setEnabled(_debugLogEnabled);
@@ -99,6 +129,14 @@ class AppController extends ChangeNotifier {
     if (language == _language) return;
     _language = language;
     store.setLanguage(language);
+    notifyListeners();
+  }
+
+  /// 设置时间制式（'system' | '12h' | '24h'），持久化并广播。
+  void setTimeFormat(String value) {
+    if (value == _timeFormat) return;
+    _timeFormat = value;
+    store.setTimeFormat(value);
     notifyListeners();
   }
 

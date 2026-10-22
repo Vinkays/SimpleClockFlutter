@@ -19,6 +19,7 @@ import 'panels/font_panel.dart';
 import 'panels/lang_panel.dart';
 import 'panels/menu_panel.dart';
 import 'panels/remind_interval_panel.dart';
+import 'panels/time_format_panel.dart';
 import 'widgets/scaled_clock.dart';
 import 'widgets/update_cards.dart';
 
@@ -38,13 +39,14 @@ part 'state/overlay_controller.dart';
 part 'state/drag_controller.dart';
 part 'state/update_flow.dart';
 
-/// 覆盖层模式：右键菜单 / 选色 / 字体 / 语言 / 更新提醒间隔 / 关于。
+/// 覆盖层模式：右键菜单 / 选色 / 字体 / 语言 / 时间制式 / 更新提醒间隔 / 关于。
 enum OverlayMode {
   menu,
   pickingText,
   pickingBg,
   pickingFont,
   pickingLang,
+  timeFormat,
   remindInterval,
   about,
 }
@@ -81,6 +83,7 @@ class _ClockPageState extends State<ClockPage>
     super.initState();
     windowManager.addListener(this);
     _startClockTicker();
+    widget.controller.addListener(_onClockSettingsChanged);
     _startUpdateSchedule();
     // 首次启动默认开启开机自启动（写标记后尊重用户后续选择）
     _initAutoStartDefault();
@@ -145,6 +148,7 @@ class _ClockPageState extends State<ClockPage>
                     second: _second,
                     textColor: widget.controller.textColor,
                     textFontFamily: widget.controller.textFontFamily,
+                    amPm: _amPm,
                   ),
                   if (_menuOpen)
                     Positioned.fill(
@@ -159,6 +163,7 @@ class _ClockPageState extends State<ClockPage>
                             onPickBgColor: () => _switchPicker(false),
                             onPickFont: _switchFontPicker,
                             onPickLanguage: _switchLanguagePicker,
+                            onPickTimeFormat: _switchTimeFormatPicker,
                             onPickRemindInterval: _switchRemindIntervalPicker,
                             onAbout: _switchAbout,
                             onToggleDebugLog: _toggleDebugLog,
@@ -189,6 +194,11 @@ class _ClockPageState extends State<ClockPage>
                             onTapOutside: _closeOverlay,
                           ),
                         OverlayMode.pickingLang => LangPanel(
+                            controller: widget.controller,
+                            onBack: _backToMenu,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.timeFormat => TimeFormatPanel(
                             controller: widget.controller,
                             onBack: _backToMenu,
                             onTapOutside: _closeOverlay,
