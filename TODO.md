@@ -10,3 +10,14 @@
   - [ ] `clock_page.dart` 更新弹窗内新增可滚动 changelog 区域，替代现在仅一句"发现新版本 vX.X.X"
 - **触发条件**：Flutter 更新多窗口应用功能后重新评估展示方案（版本更新内容过长时，现阶段单弹窗展示效果不佳）
 - **涉及文件**：`CHANGELOG.md`、`latest.json`、`.github/workflows/release.yml`、`lib/services/update_service.dart`、`lib/ui/clock_page.dart`
+
+## 时钟显示跟随系统 12/24 小时制
+
+- **状态**：待办，评估后再决定是否实施
+- **背景**：当前时钟固定 24 小时制（`clock_page.dart` 用 `now.hour` 直接取 0-23）；用户系统若为 12 小时制则显示习惯不一致。Flutter 无直接 API 读取系统 12/24 设置，需平台原生检测
+- **方案**：
+  - [ ] 平台检测：Windows 注册表 `HKCU\Control Panel\International\sTimeFormat`（含 `h` = 12 小时制，`H` = 24 小时制）；macOS `NSUserDefaults` 的 `AppleICUForce24HourTime` / `AppleICUForce12HourTime`（均无则跟随 locale）；Linux locale `LC_TIME` + 桌面环境设置（GNOME dconf `clock-format`）
+  - [ ] 设置项：「跟随系统 / 12 小时制 / 24 小时制」三选，默认跟随系统，检测失败回落固定格式
+  - [ ] `clock_page.dart` 显示逻辑按选择格式化（12 小时制补 AM/PM）
+- **触发条件**：评估后再定（用户对 UI 变化敏感，避免强制改变现有用户习惯；近似方案 `Platform.localeName` + 地区惯例映射不准确，不采用）
+- **涉及文件**：`lib/ui/clock_page.dart`、`lib/controllers/app_controller.dart`（设置项）、Windows/macOS/Linux 原生读取
