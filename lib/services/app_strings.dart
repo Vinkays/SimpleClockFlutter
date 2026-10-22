@@ -34,6 +34,9 @@ class AppStrings {
     'aboutCheckUpdate': '检查更新',
     'aboutOpenLog': '打开日志文件',
     'noLogFile': '暂无日志文件',
+    'updateUpToDate': '已是最新版',
+    'updateCheckFailed': '检查更新失败',
+    'updateCheckRetry': '检查更新失败，将自动重试',
     // 更新提醒间隔面板
     'remindIntervalTitle': '更新提醒间隔',
     'remindIntervalDesc': '点击「稍后」后，该版本过多久再次提醒',
@@ -108,6 +111,9 @@ class AppStrings {
     'aboutCheckUpdate': 'Check for Updates',
     'aboutOpenLog': 'Open Log File',
     'noLogFile': 'No log file yet',
+    'updateUpToDate': 'Already up to date',
+    'updateCheckFailed': 'Update check failed',
+    'updateCheckRetry': 'Update check failed, will retry automatically',
     // Update reminder interval panel
     'remindIntervalTitle': 'Update Reminder Interval',
     'remindIntervalDesc': 'How long to wait before reminding again after "Later"',

@@ -16,6 +16,10 @@ mixin UpdateFlowMixin on OverlayMixin, ModalMixin, WindowResizeMixin, ToastMixin
   Timer? _retryTimer;
   int _retryAttempt = 0;
 
+  /// 本次检查是否由用户手动触发（「检查更新」按钮）。
+  /// 手动检查要给结果反馈（已是最新版 / 检查失败），自动检查保持静默。
+  bool _manualCheck = false;
+
   final UpdateService _updateService = UpdateService();
 
   /// 启动更新检查调度（initState 调用一次）：
@@ -39,6 +43,7 @@ mixin UpdateFlowMixin on OverlayMixin, ModalMixin, WindowResizeMixin, ToastMixin
     await widget.controller.store.clearUpdateSnooze();
     _retryAttempt = 0;
     _retryTimer?.cancel();
+    _manualCheck = true;
     await _checkForUpdates();
   }
 
@@ -52,6 +57,10 @@ mixin UpdateFlowMixin on OverlayMixin, ModalMixin, WindowResizeMixin, ToastMixin
     LogService.instance.info('update.check trigger (retryAttempt=$_retryAttempt)');
     final result = await _updateService.checkForUpdate();
     if (!mounted) return;
+    final s = AppStrings.of(context);
+    // 取手动标记并复位：只对本次检查生效
+    final manual = _manualCheck;
+    _manualCheck = false;
     switch (result.state) {
       case UpdateCheckState.updateAvailable:
         _retryAttempt = 0;
@@ -67,6 +76,7 @@ mixin UpdateFlowMixin on OverlayMixin, ModalMixin, WindowResizeMixin, ToastMixin
             'update.check snoozed tag=${info.tagName} '
             'until=${DateTime.fromMillisecondsSinceEpoch(snoozeUntil).toIso8601String()}',
           );
+          // 手动检查前已清冷却，正常不会走到此分支；静默处理
           return;
         }
         LogService.instance.info(
@@ -82,17 +92,21 @@ mixin UpdateFlowMixin on OverlayMixin, ModalMixin, WindowResizeMixin, ToastMixin
       case UpdateCheckState.upToDate:
         LogService.instance.info('update.check up-to-date');
         _retryAttempt = 0;
+        if (manual) _showToast(s['updateUpToDate']!);
         return;
       case UpdateCheckState.httpError:
         LogService.instance.info('update.check http-error (no retry)');
         _retryAttempt = 0;
+        if (manual) _showToast(s['updateCheckFailed']!);
         return;
       case UpdateCheckState.notConfigured:
         LogService.instance.info('update.check not-configured');
         _retryAttempt = 0;
+        if (manual) _showToast(s['updateCheckFailed']!);
         return;
       case UpdateCheckState.networkError:
       case UpdateCheckState.serverError:
+        if (manual) _showToast(s['updateCheckRetry']!);
         _scheduleRetry();
         return;
     }
