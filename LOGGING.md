@@ -47,14 +47,14 @@
 | `update.check trigger (retryAttempt=N)` | 检查触发：启动 4s / 每小时心跳 / 退避重试，N=已重试次数 | — |
 | `update.check manual (cooldown cleared)` | 用户点了「检查更新」（已清冷却） | 立即检查 |
 | `update.check raw/jsdelivr/api ok update-available tag=vX.X.X` | 该通道请求成功，远端版本高于本地，**发现新版本** | 进入冷却检查 → 弹窗 |
-| `update.check raw/jsdelivr/api ok up-to-date` | 该通道请求成功，已是最新 | 静默 |
+| `update.check raw/jsdelivr/api ok up-to-date remote=vX.X.X` | 该通道请求成功，已是最新；remote=远端版本 | 静默 |
 | `update.check raw/jsdelivr/api http 404` | 通道返回 404（latest.json 不存在） | 视为内容问题，**不重试**、不降级 |
 | `update.check raw/jsdelivr/api http <5xx>` | 通道返回服务端错误（500/502/503…） | **可重试**，换下一通道或退避 |
 | `update.check raw/jsdelivr/api bad-json` | JSON 解析失败 | 内容问题，不重试、不降级 |
 | `update.check raw/jsdelivr/api empty-version` | JSON 里 version 字段为空 | 内容问题，不重试、不降级 |
 | `update.check raw/jsdelivr/api no-assets` | JSON 里 assets 为空（无安装包链接） | 内容问题，不重试、不降级 |
 | `update.check raw/jsdelivr/api socket-error / http-exception / timeout / unknown-error` | 网络不可达 / 连接异常 / 超时 | **可重试**：raw/jsdelivr 失败则降级下一通道；均失败按退避重试 |
-| `update.check <channel> decided state=… tag=…` | 该通道结果已"定论"（发现更新 / 已最新 / 内容问题），不再降级 | 按 state 处理 |
+| `update.check <channel> decided state=… tag=…` | 该通道结果已"定论"（发现更新 / 已最新 / 内容问题），不再降级；**仅有新版本时才带 tag**（无新版本信息时不输出） | 按 state 处理 |
 | `update.check fallback -> github api` | raw 与 jsdelivr 均未定论（网络类失败），降级到 GitHub API | 请求 GitHub API |
 | `update.check snoozed tag=vX.X.X until=…` | **冷却命中**：该版本点过「稍后」且未到期 | 本次不提示 |
 | `update.check show-prompt tag=vX.X.X` | 通过冷却检查，准备弹出「发现新版本」 | 撑大窗口 + 弹窗 |

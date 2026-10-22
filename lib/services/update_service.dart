@@ -121,10 +121,12 @@ class UpdateService {
   }
 
   /// 结果已"定论"时记录命中通道与状态。
+  /// 无新版本信息（upToDate / 内容问题）时不输出 tag，避免 "-" 占位误解。
   static void _logDecided(String channel, UpdateCheckResult r) {
-    final tag = r.info?.tagName ?? '-';
+    final tag = r.info?.tagName;
+    final tail = tag == null ? '' : ' tag=$tag';
     LogService.instance.info('update.check $channel decided '
-        'state=${r.state.name} tag=$tag');
+        'state=${r.state.name}$tail');
   }
 
   /// 该结果是否已"定论"（无需再尝试下一通道）。
@@ -177,7 +179,8 @@ class UpdateService {
       final tag = 'v$version';
       // 只有远端版本比当前新才提示
       if (compareVersions(_stripV(tag), currentVersion) <= 0) {
-        LogService.instance.info('update.check $channel ok up-to-date');
+        LogService.instance.info(
+            'update.check $channel ok up-to-date remote=$tag');
         return const UpdateCheckResult(UpdateCheckState.upToDate);
       }
       LogService.instance
@@ -229,7 +232,8 @@ class UpdateService {
       if (tag.isEmpty) return const UpdateCheckResult(UpdateCheckState.httpError);
       // 只有远端版本比当前新才提示
       if (compareVersions(_stripV(tag), currentVersion) <= 0) {
-        LogService.instance.info('update.check api ok up-to-date');
+        LogService.instance.info(
+            'update.check api ok up-to-date remote=$tag');
         return const UpdateCheckResult(UpdateCheckState.upToDate);
       }
       final assets = <ReleaseAsset>[];
