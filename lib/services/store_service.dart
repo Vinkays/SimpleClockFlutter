@@ -16,6 +16,10 @@ class StoreService {
   static const String kLanguage = 'language';
   static const String kSingleInstancePort = 'singleInstancePort';
   static const String kAutoStartInitialized = 'autoStartInitialized';
+  static const String kUpdateRemindHours = 'update.remindIntervalHours';
+  static const String kUpdateSnoozeVersion = 'update.snoozeVersion';
+  static const String kUpdateSnoozeUntil = 'update.snoozeUntil';
+  static const String kDebugLogEnabled = 'debugLogEnabled';
 
   SharedPreferences? _prefs;
 
@@ -110,5 +114,36 @@ class StoreService {
 
   Future<void> setAutoStartInitialized(bool value) async {
     await _prefs?.setBool(kAutoStartInitialized, value);
+  }
+
+  /// 「更新提醒间隔」小时数（默认 48，见 [UpdateConfig.defaultRemindHours]）。
+  int get updateRemindHours => _prefs?.getInt(kUpdateRemindHours) ?? 48;
+
+  Future<void> setUpdateRemindHours(int hours) async {
+    await _prefs?.setInt(kUpdateRemindHours, hours);
+  }
+
+  /// 最近一次「稍后」的版本号（null 表示无记录）。
+  String? get updateSnoozeVersion => _prefs?.getString(kUpdateSnoozeVersion);
+
+  /// 最近一次「稍后」的冷却到期时间（epoch 毫秒；null 表示无记录）。
+  int? get updateSnoozeUntil => _prefs?.getInt(kUpdateSnoozeUntil);
+
+  Future<void> setUpdateSnooze(String version, int untilMillis) async {
+    await _prefs?.setString(kUpdateSnoozeVersion, version);
+    await _prefs?.setInt(kUpdateSnoozeUntil, untilMillis);
+  }
+
+  /// 清除冷却记录（手动检查更新 / 调整提醒间隔时调用，便于本地测试）。
+  Future<void> clearUpdateSnooze() async {
+    await _prefs?.remove(kUpdateSnoozeVersion);
+    await _prefs?.remove(kUpdateSnoozeUntil);
+  }
+
+  /// 调试日志开关（默认关）。
+  bool get debugLogEnabled => _prefs?.getBool(kDebugLogEnabled) ?? false;
+
+  Future<void> setDebugLogEnabled(bool value) async {
+    await _prefs?.setBool(kDebugLogEnabled, value);
   }
 }

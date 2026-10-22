@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../services/log_service.dart';
 import '../services/single_instance_service.dart';
 import '../services/store_service.dart';
 import '../services/tray_service.dart';
@@ -39,6 +40,14 @@ class AppController extends ChangeNotifier {
   String _language = 'system';
   String get language => _language;
 
+  /// 「更新提醒间隔」小时数（「稍后」后该版本冷却多久再提示）。
+  int _updateRemindHours = 48;
+  int get updateRemindHours => _updateRemindHours;
+
+  /// 调试日志开关（默认关；开启后更新检查链路落盘，供远程诊断）。
+  bool _debugLogEnabled = false;
+  bool get debugLogEnabled => _debugLogEnabled;
+
   bool _isLocked = false;
   bool get isLocked => _isLocked;
 
@@ -64,6 +73,9 @@ class AppController extends ChangeNotifier {
     _textColor = store.textColor ?? const Color(0xFF000000);
     _textFontFamily = store.textFontFamily;
     _language = store.language ?? 'system';
+    _updateRemindHours = store.updateRemindHours;
+    _debugLogEnabled = store.debugLogEnabled;
+    LogService.instance.setEnabled(_debugLogEnabled);
   }
 
   /// 设置外观（背景色 / 文字颜色），持久化并广播。
@@ -87,6 +99,26 @@ class AppController extends ChangeNotifier {
     if (language == _language) return;
     _language = language;
     store.setLanguage(language);
+    notifyListeners();
+  }
+
+  /// 设置「更新提醒间隔」小时数，持久化并广播。
+  /// 同时清除该版本的冷却记录：调整间隔 = 用户期待新的提醒节奏，
+  /// 旧的「稍后」冷却不应继续拦截提醒。
+  void setUpdateRemindHours(int hours) {
+    if (hours == _updateRemindHours) return;
+    _updateRemindHours = hours;
+    store.setUpdateRemindHours(hours);
+    store.clearUpdateSnooze();
+    notifyListeners();
+  }
+
+  /// 切换调试日志开关，持久化并同步 LogService。
+  void setDebugLogEnabled(bool value) {
+    if (value == _debugLogEnabled) return;
+    _debugLogEnabled = value;
+    store.setDebugLogEnabled(value);
+    LogService.instance.setEnabled(value);
     notifyListeners();
   }
 

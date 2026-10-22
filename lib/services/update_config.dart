@@ -20,6 +20,13 @@ class UpdateConfig {
   static const String latestInfoUrl =
       'https://raw.githubusercontent.com/Vinkays/SimpleClockFlutter/main/latest.json';
 
+  /// 版本信息文件备选地址（jsdelivr CDN：大陆网络可直连，缓存约 12 小时）。
+  ///
+  /// 当 [latestInfoUrl] 网络不可达（raw.githubusercontent.com 在国内常被
+  /// DNS 污染/连接重置）时作为兜底通道；仍失败再回退 GitHub API。
+  static const String jsdelivrInfoUrl =
+      'https://cdn.jsdelivr.net/gh/Vinkays/SimpleClockFlutter@main/latest.json';
+
   /// 当前应用版本（与 pubspec.yaml 的 version 保持一致）。
   static const String currentVersion = '0.0.10';
 }

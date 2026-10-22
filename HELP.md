@@ -76,16 +76,21 @@ pwsh tools/set_version.ps1 版本号
 
 ### 自动更新（自建更新器，GitHub Releases）
 
-应用启动数秒后自动优先检查raw `latest.json`（不限流），API `https://api.github.com/repos/Vinkays/SimpleClockFlutter/releases/latest`（每日限流）兜底：
+检查链（按顺序，遇网络类失败自动降级下一通道）：
 
+1. **raw**：`raw.githubusercontent.com/…/latest.json` —— 首选，无 API 限流、实时
+2. **jsdelivr CDN**：`cdn.jsdelivr.net/gh/…@main/latest.json` —— 兜底 1，大陆网络可达，缓存约 12 小时
+3. **GitHub API**：`api.github.com/repos/…/releases/latest` —— 兜底 2，匿名限流 60 次/小时/IP
+
+机制：
+
+- **心跳**：启动 4 秒后首次检查，之后每小时复查一次（应用常驻托盘期间持续有效）
+- **退避重试**：网络不可达 / 服务端 5xx 按 3min → 15min → 30min 重试，耗尽后由心跳接管；4xx / 内容非法不重试（重试无意义）
+- **冷却去重**：点「稍后」后该版本在「更新提醒间隔」内不再弹窗（跨重启保留）；新版本不受旧冷却影响
 - 发现比当前版本新的 Release → 弹窗询问 → 下载安装包 → 静默安装（Windows `/VERYSILENT`）
-- Windows 安装包需以 `.exe` 结尾（Inno Setup 产物即符合）；macOS/Linux 的更新流程在 `update_service.dart` 中按平台扩展
+- 手动检查：右键菜单 →「关于我们」→「检查更新」（会先清冷却，便于本地测试）
 
-**发布新版本步骤**：
-
-
-
-### 一键发布（GitHub Actions）
+> 排障：用户收不到更新提示 / 下载失败时，让用户开启「调试日志」（右键菜单）→ 手动检查一次 → 把日志文件发给你。日志位置与每条日志含义见 **[LOGGING.md](/LOGGING.md)**。
 
 仓库内置 `.github/workflows/release.yml`：**推送 `v*` 格式的 tag 即自动在三平台云端并行构建安装包并上传到该 tag 的 Release**，无需本机安装 Inno Setup，也无需 macOS/Linux 机器。
 

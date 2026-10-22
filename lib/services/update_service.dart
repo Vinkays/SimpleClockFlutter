@@ -1,7 +1,46 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'log_service.dart';
 import 'update_config.dart';
+
+/// 更新检查结果状态。
+///
+/// - [networkError]/[serverError]：可退避重试（网络不可达 / 服务端 5xx）；
+/// - [httpError]：内容问题（latest.json 缺失、格式非法），重试无意义，不重试。
+enum UpdateCheckState {
+  /// 发现新版本（[UpdateCheckResult.info] 非空）。
+  updateAvailable,
+
+  /// 已是最新版本。
+  upToDate,
+
+  /// 网络不可达（超时 / 连接失败 / DNS 解析失败）。
+  networkError,
+
+  /// 服务端返回 5xx。
+  serverError,
+
+  /// HTTP 4xx 或内容格式非法。
+  httpError,
+
+  /// 未配置 GitHub 仓库。
+  notConfigured,
+}
+
+/// 一次更新检查的结果。
+class UpdateCheckResult {
+  const UpdateCheckResult(this.state, [this.info]);
+
+  final UpdateCheckState state;
+  final ReleaseInfo? info;
+
+  /// 是否值得退避重试（网络层问题；内容问题重试无意义）。
+  bool get retryable =>
+      state == UpdateCheckState.networkError ||
+      state == UpdateCheckState.serverError;
+}
 
 /// GitHub Release 中的一个资源（如安装包）。
 class ReleaseAsset {
@@ -52,28 +91,78 @@ class UpdateService {
       !owner.startsWith('YOUR_') &&
       repo.isNotEmpty;
 
-  /// 检查是否有新版本。无更新 / 未配置 / 网络失败均返回 null。
+  /// 检查是否有新版本。
   ///
-  /// 优先读取 raw.githubusercontent.com 的版本信息文件（CDN、无 API 限流），
-  /// 失败时回退 GitHub API（匿名限流 60 次/小时/IP，仅作兜底）。
-  Future<ReleaseInfo?> checkForUpdate() async {
-    if (!configured) return null;
-    return await _checkViaLatestJson() ?? await _checkViaApi();
+  /// 通道顺序：raw.githubusercontent.com（CDN、无 API 限流、实时）→
+  /// jsdelivr CDN（大陆网络可达，缓存约 12 小时）→ GitHub API
+  /// （匿名限流 60 次/小时/IP，仅作最终兜底）。
+  /// raw / jsdelivr 网络不可达或 5xx 才继续下一通道；4xx / 内容非法不降级。
+  Future<UpdateCheckResult> checkForUpdate() async {
+    if (!configured) {
+      LogService.instance.info('update.check skip: repo not configured');
+      return const UpdateCheckResult(UpdateCheckState.notConfigured);
+    }
+    LogService.instance.info(
+      'update.check start (current=$currentVersion, '
+      'raw=${UpdateConfig.latestInfoUrl})',
+    );
+    var r = await _checkJson('raw', UpdateConfig.latestInfoUrl);
+    if (_decided(r)) {
+      _logDecided('raw', r);
+      return r;
+    }
+    r = await _checkJson('jsdelivr', UpdateConfig.jsdelivrInfoUrl);
+    if (_decided(r)) {
+      _logDecided('jsdelivr', r);
+      return r;
+    }
+    LogService.instance.info('update.check fallback -> github api');
+    return _checkViaApi();
   }
 
-  Future<ReleaseInfo?> _checkViaLatestJson() async {
+  /// 结果已"定论"时记录命中通道与状态。
+  static void _logDecided(String channel, UpdateCheckResult r) {
+    final tag = r.info?.tagName ?? '-';
+    LogService.instance.info('update.check $channel decided '
+        'state=${r.state.name} tag=$tag');
+  }
+
+  /// 该结果是否已"定论"（无需再尝试下一通道）。
+  static bool _decided(UpdateCheckResult r) =>
+      r.state == UpdateCheckState.updateAvailable ||
+      r.state == UpdateCheckState.upToDate ||
+      r.state == UpdateCheckState.httpError;
+
+  /// 请求单个 JSON 版本信息文件（raw / jsdelivr 共用）。
+  Future<UpdateCheckResult> _checkJson(String channel, String url) async {
     final client = _client();
     try {
-      final req = await client.getUrl(Uri.parse(UpdateConfig.latestInfoUrl));
+      final req = await client.getUrl(Uri.parse(url));
       final resp = await req.close();
+      if (resp.statusCode == 404) {
+        await resp.drain<void>();
+        LogService.instance.info('update.check $channel http 404');
+        return const UpdateCheckResult(UpdateCheckState.httpError);
+      }
       if (resp.statusCode != 200) {
         await resp.drain<void>();
-        return null;
+        LogService.instance
+            .info('update.check $channel http ${resp.statusCode}');
+        return const UpdateCheckResult(UpdateCheckState.serverError);
       }
       final body = await resp.transform(utf8.decoder).join();
-      final json = jsonDecode(body) as Map<String, dynamic>;
+      final Map<String, dynamic> json;
+      try {
+        json = jsonDecode(body) as Map<String, dynamic>;
+      } on FormatException {
+        LogService.instance.info('update.check $channel bad-json');
+        return const UpdateCheckResult(UpdateCheckState.httpError);
+      }
       final version = (json['version'] as String? ?? '').trim();
-      if (version.isEmpty) return null;
+      if (version.isEmpty) {
+        LogService.instance.info('update.check $channel empty-version');
+        return const UpdateCheckResult(UpdateCheckState.httpError);
+      }
       final assets = <ReleaseAsset>[];
       final assetMap = json['assets'] as Map<String, dynamic>? ?? const {};
       assetMap.forEach((platform, url) {
@@ -81,19 +170,41 @@ class UpdateService {
         if (s.isEmpty) return;
         assets.add(ReleaseAsset(name: s.split('/').last, downloadUrl: s));
       });
-      if (assets.isEmpty) return null;
+      if (assets.isEmpty) {
+        LogService.instance.info('update.check $channel no-assets');
+        return const UpdateCheckResult(UpdateCheckState.httpError);
+      }
       final tag = 'v$version';
       // 只有远端版本比当前新才提示
-      if (compareVersions(_stripV(tag), currentVersion) <= 0) return null;
-      return ReleaseInfo(tagName: tag, assets: assets);
+      if (compareVersions(_stripV(tag), currentVersion) <= 0) {
+        LogService.instance.info('update.check $channel ok up-to-date');
+        return const UpdateCheckResult(UpdateCheckState.upToDate);
+      }
+      LogService.instance
+          .info('update.check $channel ok update-available tag=$tag');
+      return UpdateCheckResult(
+        UpdateCheckState.updateAvailable,
+        ReleaseInfo(tagName: tag, assets: assets),
+      );
+    } on SocketException {
+      LogService.instance.info('update.check $channel socket-error');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
+    } on HttpException {
+      LogService.instance.info('update.check $channel http-exception');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
+    } on TimeoutException {
+      LogService.instance.info('update.check $channel timeout');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
     } catch (_) {
-      return null;
+      // 其余异常（连接中断等）视作网络层问题，保守重试
+      LogService.instance.info('update.check $channel unknown-error');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
     } finally {
       client.close();
     }
   }
 
-  Future<ReleaseInfo?> _checkViaApi() async {
+  Future<UpdateCheckResult> _checkViaApi() async {
     final client = _client();
     try {
       final req = await client.getUrl(
@@ -101,16 +212,26 @@ class UpdateService {
       );
       req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
       final resp = await req.close();
+      if (resp.statusCode == 404) {
+        await resp.drain<void>();
+        LogService.instance.info('update.check api http 404');
+        return const UpdateCheckResult(UpdateCheckState.httpError);
+      }
       if (resp.statusCode != 200) {
         await resp.drain<void>();
-        return null;
+        LogService.instance
+            .info('update.check api http ${resp.statusCode}');
+        return const UpdateCheckResult(UpdateCheckState.serverError);
       }
       final body = await resp.transform(utf8.decoder).join();
       final json = jsonDecode(body) as Map<String, dynamic>;
       final tag = (json['tag_name'] as String? ?? '').trim();
-      if (tag.isEmpty) return null;
+      if (tag.isEmpty) return const UpdateCheckResult(UpdateCheckState.httpError);
       // 只有远端版本比当前新才提示
-      if (compareVersions(_stripV(tag), currentVersion) <= 0) return null;
+      if (compareVersions(_stripV(tag), currentVersion) <= 0) {
+        LogService.instance.info('update.check api ok up-to-date');
+        return const UpdateCheckResult(UpdateCheckState.upToDate);
+      }
       final assets = <ReleaseAsset>[];
       for (final item in json['assets'] as List? ?? const []) {
         final m = item as Map<String, dynamic>;
@@ -121,9 +242,28 @@ class UpdateService {
           downloadUrl: url,
         ));
       }
-      return ReleaseInfo(tagName: tag, assets: assets);
+      if (assets.isEmpty) {
+        LogService.instance.info('update.check api no-assets');
+        return const UpdateCheckResult(UpdateCheckState.httpError);
+      }
+      LogService.instance
+          .info('update.check api ok update-available tag=$tag');
+      return UpdateCheckResult(
+        UpdateCheckState.updateAvailable,
+        ReleaseInfo(tagName: tag, assets: assets),
+      );
+    } on SocketException {
+      LogService.instance.info('update.check api socket-error');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
+    } on HttpException {
+      LogService.instance.info('update.check api http-exception');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
+    } on TimeoutException {
+      LogService.instance.info('update.check api timeout');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
     } catch (_) {
-      return null;
+      LogService.instance.info('update.check api unknown-error');
+      return const UpdateCheckResult(UpdateCheckState.networkError);
     } finally {
       client.close();
     }
@@ -135,12 +275,15 @@ class UpdateService {
     ReleaseAsset asset, {
     void Function(double progress)? onProgress,
   }) async {
+    LogService.instance.info('update.download start url=${asset.downloadUrl}');
     final client = _client();
     try {
       final req = await client.getUrl(Uri.parse(asset.downloadUrl));
       final resp = await req.close();
       if (resp.statusCode != 200) {
         await resp.drain<void>();
+        LogService.instance
+            .info('update.download fail http ${resp.statusCode}');
         return null;
       }
       final total = resp.contentLength;
@@ -155,8 +298,11 @@ class UpdateService {
         }
       }
       await sink.close();
+      LogService.instance
+          .info('update.download ok bytes=$received -> ${file.path}');
       return file;
     } catch (_) {
+      LogService.instance.info('update.download fail unknown-error');
       return null;
     } finally {
       client.close();
@@ -174,6 +320,10 @@ class UpdateService {
   /// - macOS：dmg → 挂载 → ditto 替换 /Applications/SimpleClock.app → open 新版。
   /// - Linux：AppImage → install 复制到 ~/.local/bin → 等旧实例退出后启动新版。
   Future<bool> launchInstaller(File installer) async {
+    LogService.instance.info(
+      'update.launch start platform=$Platform.operatingSystem '
+      'installer=${installer.path}',
+    );
     try {
       if (Platform.isWindows) {
         await Process.start(
@@ -181,6 +331,7 @@ class UpdateService {
           const ['/VERYSILENT', '/NORESTART'],
           runInShell: false,
         );
+        LogService.instance.info('update.launch ok (windows)');
         return true;
       }
       if (Platform.isMacOS) {
@@ -190,6 +341,7 @@ class UpdateService {
           [script.path, installer.path],
           runInShell: false,
         );
+        LogService.instance.info('update.launch ok (macos)');
         return true;
       }
       if (Platform.isLinux) {
@@ -199,10 +351,13 @@ class UpdateService {
           [script.path, installer.path],
           runInShell: false,
         );
+        LogService.instance.info('update.launch ok (linux)');
         return true;
       }
+      LogService.instance.info('update.launch unsupported-platform');
       return false;
-    } catch (_) {
+    } catch (e) {
+      LogService.instance.info('update.launch fail: $e');
       return false;
     }
   }

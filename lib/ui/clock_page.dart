@@ -11,9 +11,43 @@ import 'package:window_manager/window_manager.dart';
 import '../controllers/app_controller.dart';
 import '../services/app_strings.dart';
 import '../services/auto_launch_service.dart';
-import '../services/update_config.dart';
+import '../services/log_service.dart';
 import '../services/update_service.dart';
-import 'overlay_panel.dart';
+import 'panels/about_panel.dart';
+import 'panels/color_panel.dart';
+import 'panels/font_panel.dart';
+import 'panels/lang_panel.dart';
+import 'panels/menu_panel.dart';
+import 'panels/remind_interval_panel.dart';
+import 'widgets/scaled_clock.dart';
+import 'widgets/update_cards.dart';
+
+// 按职责拆分的 State 行为 mixin（part of 同库，共享私有成员）：
+//  - clock_ticker.dart      时钟走时（整秒对齐 + 每秒更新）
+//  - modal_state.dart       更新弹窗/进度层模态状态
+//  - window_resize.dart     窗口撑大/恢复
+//  - toast_controller.dart  轻提示
+//  - overlay_controller.dart 右键菜单与设置面板
+//  - drag_controller.dart   左键拖拽窗口
+//  - update_flow.dart       自动更新（检查/重试/冷却/下载）
+part 'state/clock_ticker.dart';
+part 'state/modal_state.dart';
+part 'state/window_resize.dart';
+part 'state/toast_controller.dart';
+part 'state/overlay_controller.dart';
+part 'state/drag_controller.dart';
+part 'state/update_flow.dart';
+
+/// 覆盖层模式：右键菜单 / 选色 / 字体 / 语言 / 更新提醒间隔 / 关于。
+enum OverlayMode {
+  menu,
+  pickingText,
+  pickingBg,
+  pickingFont,
+  pickingLang,
+  remindInterval,
+  about,
+}
 
 /// 时钟主界面（对应原版 src/pages/main/App.vue）。
 ///
@@ -32,121 +66,39 @@ class ClockPage extends StatefulWidget {
   State<ClockPage> createState() => _ClockPageState();
 }
 
-class _ClockPageState extends State<ClockPage> with WindowListener {
-  static const double _resizeEdgeThreshold = 4;
-
-  // 更新弹窗固定字体：不跟随用户自选字体。
-  // Windows 用微软雅黑，其余平台经 fontFamilyFallback 依次回退系统字体。
-  static const String _dialogFontFamily = 'Microsoft YaHei';
-  static const List<String> _dialogFontFallback = [
-    'PingFang SC',
-    'Noto Sans CJK SC',
-    'WenQuanYi Micro Hei',
-  ];
-
-  /// 覆盖面板所需的最小窗口尺寸（当前窗口小于此值时临时撑大，关闭后恢复）。
-  static const Size _menuMinWindow = Size(240, 300);
-  static const Size _pickerMinWindow = Size(320, 440);
-  // Toast 显示时窗口太小会放不下文字，临时撑大到能完整展示
-  static const Size _toastMinWindow = Size(240, 60);
-
-  Timer? _timer;
-  Timer? _toastTimer;
-  Timer? _updateCheckTimer;
-  String _hour = '00';
-  String _minute = '00';
-  String _second = '00';
-
-  // ---- 手动拖拽状态 ----
-  bool _dragging = false;
-  bool _sizeLocked = false;
-  bool _dragBusy = false;
-  Offset? _dragAnchorPointer;
-  Offset _dragCurrentWindow = Offset.zero;
-
-  // ---- 覆盖面板状态 ----
-  bool _menuOpen = false;
-  OverlayMode _overlayMode = OverlayMode.menu;
-  bool _menuAutoLaunchSupported = true;
-  bool _menuAutoLaunchEnabled = false;
-  Size? _sizeBeforeOverlay;
-  bool _windowExpanded = false;
-  bool _resizingWindow = false;
-
-  // ---- 更新弹窗状态（自绘，不依赖系统 Dialog）----
-  bool _updatePromptVisible = false;
-  ReleaseInfo? _pendingUpdate;
-  bool _updateProgressVisible = false;
-  double _updateProgress = 0;
-  bool _updateCancelled = false;
-
-  // ---- 轻提示（替代系统通知）----
-  String? _toast;
-
-  final AutoLaunchService _autoLaunch = AutoLaunchService();
-  final UpdateService _updateService = UpdateService();
-
+class _ClockPageState extends State<ClockPage>
+    with
+        ClockTickerMixin,
+        ModalMixin,
+        WindowResizeMixin,
+        ToastMixin,
+        OverlayMixin,
+        ClockDragMixin,
+        UpdateFlowMixin,
+        WindowListener {
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    _updateTime();
-    // 对齐到下一个整秒再开始周期更新：
-    // 避免首帧渲染耗时（尤其 debug 模式）导致 tick 相位漂移，
-    // 让每次更新都落在系统秒边界附近，显示的秒始终是真实当前秒。
-    final now = DateTime.now();
-    final msToNextSecond = 1000 - now.millisecond;
-    _timer = Timer(Duration(milliseconds: msToNextSecond), () {
-      _updateTime();
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateTime());
-    });
-    // 启动数秒后再检查更新，避免打扰首次使用
-    _updateCheckTimer = Timer(
-      const Duration(seconds: 4),
-      _checkForUpdates,
-    );
+    _startClockTicker();
+    _startUpdateSchedule();
     // 首次启动默认开启开机自启动（写标记后尊重用户后续选择）
     _initAutoStartDefault();
-  }
-
-  /// 首次启动默认开启开机自启动。
-  ///
-  /// 仅当从未初始化过时调用一次 [AutoLaunchService.enable]；
-  /// 成功后写入标记，之后用户在菜单中手动移除/重新开启的选择都会被尊重，
-  /// 不会每次启动都强制重置。
-  Future<void> _initAutoStartDefault() async {
-    if (widget.controller.store.isAutoStartInitialized) return;
-    try {
-      final ok = await _autoLaunch.enable();
-      if (ok) {
-        await widget.controller.store.setAutoStartInitialized(true);
-      }
-    } catch (_) {
-      // 平台不支持或系统限制：保持静默，下次启动再尝试
-    }
   }
 
   @override
   void dispose() {
     windowManager.removeListener(this);
-    _timer?.cancel();
-    _toastTimer?.cancel();
-    _updateCheckTimer?.cancel();
+    _disposeClockTicker();
+    _disposeToast();
+    _disposeUpdateSchedule();
     super.dispose();
   }
 
-  void _updateTime() {
-    final now = DateTime.now();
-    final h = now.hour.toString().padLeft(2, '0');
-    final m = now.minute.toString().padLeft(2, '0');
-    final s = now.second.toString().padLeft(2, '0');
-    if (h != _hour || m != _minute || s != _second) {
-      setState(() {
-        _hour = h;
-        _minute = m;
-        _second = s;
-      });
-    }
+  /// Toast 结束时恢复窗口：菜单仍打开则保持撑大，菜单关闭时统一恢复。
+  @override
+  Future<void> _restoreAfterToast() async {
+    if (!_menuOpen) await _closeOverlay();
   }
 
   // ================= WindowListener =================
@@ -168,509 +120,6 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
     _endDrag();
   }
 
-  // ================= 指针事件：拖拽 / 缩放 / 右键菜单 =================
-
-  void _onPointerDown(PointerDownEvent event) {
-    if (event.kind != PointerDeviceKind.mouse) return;
-    if (_menuOpen) return; // 覆盖面板自身处理所有指针交互
-    if (event.buttons == kSecondaryMouseButton) {
-      _openMenu(event.position);
-      return;
-    }
-    if (event.buttons != kPrimaryMouseButton) return;
-    if (widget.controller.isLocked) return;
-    if (_isNearEdge(event.position)) return; // 边缘交给系统缩放
-    _beginDrag(event.position);
-  }
-
-  void _onPointerMove(PointerMoveEvent event) {
-    if (!_dragging) return;
-    _onDragMove(event);
-  }
-
-  void _onPointerUp(PointerUpEvent event) {
-    _endDrag();
-  }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    _endDrag();
-  }
-
-  bool _isNearEdge(Offset pos) {
-    final size = MediaQuery.sizeOf(context);
-    return pos.dx <= _resizeEdgeThreshold ||
-        pos.dx >= size.width - _resizeEdgeThreshold ||
-        pos.dy <= _resizeEdgeThreshold ||
-        pos.dy >= size.height - _resizeEdgeThreshold;
-  }
-
-  // ---- 手动拖拽（与原版 beginMove/endMove 思路一致）----
-
-  Future<void> _beginDrag(Offset localPos) async {
-    if (_sizeLocked) return;
-    Offset pos;
-    Size size;
-    try {
-      pos = await windowManager.getPosition();
-      size = await windowManager.getSize();
-      // 拖动期间锁定窗口大小，避免系统在移动时触发 resize
-      await windowManager.setMinimumSize(size);
-      await windowManager.setMaximumSize(size);
-    } catch (_) {
-      return;
-    }
-    if (!mounted) return;
-    setState(() {
-      _dragging = true;
-      _sizeLocked = true;
-      _dragAnchorPointer = localPos;
-      _dragCurrentWindow = pos;
-    });
-  }
-
-  Future<void> _onDragMove(PointerMoveEvent event) async {
-    final anchor = _dragAnchorPointer;
-    if (anchor == null || _dragBusy) return;
-    _dragBusy = true;
-    try {
-      final target = _dragCurrentWindow + (event.position - anchor);
-      _dragCurrentWindow = target;
-      await windowManager.setPosition(target);
-    } catch (_) {
-    } finally {
-      _dragBusy = false;
-    }
-  }
-
-  Future<void> _endDrag() async {
-    if (!_dragging) return;
-    _dragging = false;
-    if (_sizeLocked) {
-      _sizeLocked = false;
-      try {
-        await windowManager.setMinimumSize(AppController.kMinWindowSize);
-        await windowManager.setMaximumSize(AppController.kMaxWindowSize);
-      } catch (_) {}
-    }
-    widget.controller.persistWindowState();
-  }
-
-  // ================= 覆盖面板（菜单 / 选色） =================
-
-  Future<void> _openMenu(Offset pos) async {
-    // 更新弹窗（模态）显示期间不允许打开菜单/面板
-    if (_updatePromptVisible || _updateProgressVisible) return;
-    var supported = Platform.isWindows || Platform.isMacOS || Platform.isLinux;
-    var enabled = false;
-    if (supported) {
-      try {
-        enabled = await _autoLaunch.isEnabled();
-      } catch (_) {
-        supported = false;
-      }
-    }
-    if (!mounted) return;
-    setState(() {
-      _menuOpen = true;
-      _overlayMode = OverlayMode.menu;
-      _menuAutoLaunchSupported = supported;
-      _menuAutoLaunchEnabled = enabled;
-    });
-    await _ensureWindowSize(_menuMinWindow);
-  }
-
-  void _switchPicker(bool isText) {
-    setState(() {
-      _overlayMode = isText ? OverlayMode.pickingText : OverlayMode.pickingBg;
-    });
-    _ensureWindowSize(_pickerMinWindow);
-  }
-
-  void _switchFontPicker() {
-    setState(() => _overlayMode = OverlayMode.pickingFont);
-    _ensureWindowSize(_menuMinWindow);
-  }
-
-  void _switchLanguagePicker() {
-    setState(() => _overlayMode = OverlayMode.pickingLang);
-    _ensureWindowSize(_menuMinWindow);
-  }
-
-  void _backToMenu() {
-    setState(() => _overlayMode = OverlayMode.menu);
-  }
-
-  void _applyFont(String? family) {
-    widget.controller.setTextFontFamily(family);
-    _closeOverlay();
-  }
-
-  /// 当前窗口小于 [needed] 时临时撑大窗口（记录原始尺寸，供关闭时恢复）。
-  Future<void> _ensureWindowSize(Size needed) async {
-    if (_resizingWindow) return;
-    _resizingWindow = true;
-    try {
-      final cur = await windowManager.getSize();
-      if (cur.width < needed.width || cur.height < needed.height) {
-        _sizeBeforeOverlay ??= cur;
-        _windowExpanded = true;
-        final target = Size(
-          math.max(cur.width, needed.width),
-          math.max(cur.height, needed.height),
-        );
-        await windowManager.setSize(target);
-      }
-    } catch (_) {
-      // 窗口未就绪等情况下静默忽略，面板本身仍可滚动使用
-    } finally {
-      _resizingWindow = false;
-    }
-  }
-
-  Future<void> _closeOverlay() async {
-    // 更新弹窗显示期间保持窗口撑大与弹窗可见（失焦等场景不得恢复/关闭）
-    if (_updatePromptVisible || _updateProgressVisible) return;
-    if (!_menuOpen && !_windowExpanded) return;
-    if (mounted) setState(() => _menuOpen = false);
-    if (_windowExpanded) {
-      _windowExpanded = false;
-      final restore = _sizeBeforeOverlay;
-      _sizeBeforeOverlay = null;
-      if (restore != null) {
-        try {
-          await windowManager.setSize(restore);
-        } catch (_) {}
-      }
-    }
-  }
-
-  void _applyColor(Color color, bool isText) {
-    final controller = widget.controller;
-    controller.setAppearance(
-      isText ? controller.bgColor : color,
-      isText ? color : controller.textColor,
-    );
-    _closeOverlay();
-  }
-
-  void _toggleLock() {
-    widget.controller.toggleLock();
-    _closeOverlay();
-  }
-
-  void _toggleAlwaysOnTop() {
-    widget.controller.toggleAlwaysOnTop();
-    _closeOverlay();
-  }
-
-  Future<void> _toggleAutoLaunch() async {
-    final target = !_menuAutoLaunchEnabled;
-    _closeOverlay();
-    final s = AppStrings.of(context);
-    try {
-      final ok = target ? await _autoLaunch.enable() : await _autoLaunch.disable();
-      _showToast(
-        ok
-            ? (target ? s['autoStartSuccess']! : s['autoStartRemoveSuccess']!)
-            : s['autoStartFailed']!,
-      );
-    } catch (e) {
-      _showToast('${s['autoStartFailedDetail']!}$e');
-    }
-  }
-
-  Future<void> _quitApp() async {
-    await _closeOverlay(); // 先恢复窗口尺寸，再持久化并退出
-    widget.controller.quitApp();
-  }
-
-  // ---- 轻提示 ----
-
-  void _showToast(String message) {
-    _toastTimer?.cancel();
-    setState(() => _toast = message);
-    // 窗口太小时临时撑大，保证 Toast 文字完整可见
-    _ensureWindowSize(_toastMinWindow);
-    _toastTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _toast = null);
-        // 恢复被撑大的窗口尺寸（菜单仍打开时保持，菜单关闭时再统一恢复）
-        if (!_menuOpen) _closeOverlay();
-      }
-    });
-  }
-
-  // ---- 自动更新 ----
-
-  /// 启动后延迟调用：检查 GitHub Releases，发现新版本弹窗提示。
-  Future<void> _checkForUpdates() async {
-    final info = await _updateService.checkForUpdate();
-    if (info == null || !mounted) return;
-    // 不主动关闭菜单：更新弹窗渲染在菜单之上，先处理弹窗，菜单保持可用
-    await _ensureWindowSize(const Size(400, 320));
-    if (!mounted) return;
-    setState(() {
-      _pendingUpdate = info;
-      _updatePromptVisible = true;
-    });
-  }
-
-  /// 「稍后更新」：关闭提示层；菜单仍打开时保持窗口与菜单（共享撑大状态）。
-  void _updateLater() {
-    _closeUpdateLayer();
-  }
-
-  /// 关闭更新弹窗层：清提示+进度状态；菜单未打开时恢复被撑大的窗口。
-  void _closeUpdateLayer() {
-    if (!mounted) return;
-    setState(() {
-      _updatePromptVisible = false;
-      _updateProgressVisible = false;
-    });
-    // 菜单还开着则保持窗口撑大（菜单面板需要），待菜单关闭时再统一恢复
-    if (!_menuOpen) _closeOverlay();
-  }
-
-  /// 取消下载：标记取消并关闭进度层（菜单打开时保持窗口与菜单）。
-  void _cancelDownload() {
-    _updateCancelled = true;
-    _closeUpdateLayer();
-  }
-
-  /// 「立即更新」：关闭提示 → 下载安装包（期间保持窗口撑大，避免进度卡溢出）
-  /// → 启动安装器后退出应用。
-  Future<void> _updateNow() async {
-    if (!mounted) return;
-    // 提示关闭，但窗口保持撑大状态（供下载进度卡使用，结束后再恢复）
-    setState(() => _updatePromptVisible = false);
-    final info = _pendingUpdate;
-    if (info == null) return;
-    final s = AppStrings.of(context);
-
-    // 按当前平台选择安装包（Windows .exe / macOS .dmg / Linux .AppImage）
-    final asset = _updateService.platformAsset(info);
-    if (asset == null) {
-      if (!_menuOpen) await _closeOverlay();
-      _showToast(s['updateFailed']!);
-      return;
-    }
-
-    // 下载并显示进度（自绘，不依赖系统 Dialog）
-    setState(() {
-      _updateProgressVisible = true;
-      _updateProgress = 0;
-      _updateCancelled = false;
-    });
-    File? installer;
-    try {
-      installer = await _updateService.downloadAsset(
-        asset,
-        onProgress: (p) {
-          if (!mounted) return;
-          setState(() => _updateProgress = p);
-        },
-      );
-    } finally {
-      if (mounted) setState(() => _updateProgressVisible = false);
-    }
-    if (!mounted) return;
-    // 用户已取消：丢弃下载结果，不安装不提示
-    if (_updateCancelled) return;
-    if (installer == null) {
-      if (!_menuOpen) await _closeOverlay();
-      _showToast(s['updateFailed']!);
-      return;
-    }
-
-    // 启动安装器后退出应用（launchInstaller 只启动不等待；即将退出无需恢复窗口）
-    _showToast(s['updateLaunching']!);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    final ok = await _updateService.launchInstaller(installer);
-    if (ok && mounted) {
-      widget.controller.quitApp();
-    } else if (mounted) {
-      if (!_menuOpen) await _closeOverlay();
-      _showToast(s['updateFailed']!);
-    }
-  }
-
-  /// 更新提示卡片（自绘：绕开系统 Dialog 在工具窗/失焦/缩放下的渲染异常）。
-  Widget _buildUpdatePromptCard() {
-    final s = AppStrings.of(context);
-    final info = _pendingUpdate;
-    if (info == null) return const SizedBox.shrink();
-    return Material(
-      color: const Color(0xFF2A2A2A),
-      // 模态弹窗必须包 Material：提供正规 DefaultTextStyle/dialogTheme
-      // 上下文，按钮与文字的主题解析走标准路径（裸 Container 缺失该上下文）
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 340,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          // 窗口过矮时允许内部滚动，避免 RenderFlex overflow
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 标题前加灯泡 icon（尺寸 22 > 标题 16，视觉上更突出）
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(Icons.lightbulb_outline, size: 22, color: Colors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        s['updateAvailableTitle']!,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          // 深灰自绘底上固定白字，不继承浅色主题黑字
-                          color: Colors.white,
-                          // 固定系统字体，不跟随用户自选字体
-                          fontFamily: _dialogFontFamily,
-                          fontFamilyFallback: _dialogFontFallback,
-                          // 不设任何装饰线（无删除线/下划线）
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // 正文：版本号单独加大字号，比其余文字显眼一点
-                Builder(builder: (context) {
-                  final template = s['updateAvailableBody']!;
-                  final curVer = 'v${UpdateConfig.currentVersion}';
-                  final newVer = info.tagName;
-                  // 按 {0} / {1} 占位符拆分模板，保证中英文均可用
-                  final seg0 = template.split('{0}');
-                  final seg1 = seg0[1].split('{1}');
-                  const baseStyle = TextStyle(
-                    fontSize: 13,
-                    color: Colors.white,
-                    // 固定系统字体，不跟随用户自选字体
-                    fontFamily: _dialogFontFamily,
-                    fontFamilyFallback: _dialogFontFallback,
-                  );
-                  const verStyle = TextStyle(
-                    fontSize: 15,
-                    color: Colors.white,
-                    fontFamily: _dialogFontFamily,
-                    fontFamilyFallback: _dialogFontFallback,
-                  );
-                  return Text.rich(
-                    TextSpan(
-                      style: baseStyle,
-                      children: [
-                        TextSpan(text: seg0[0]),
-                        TextSpan(text: curVer, style: verStyle),
-                        TextSpan(text: seg1[0]),
-                        TextSpan(text: newVer, style: verStyle),
-                        TextSpan(text: seg1[1]),
-                      ],
-                    ),
-                  );
-                }),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _updateLater,
-                      child: Text(
-                        s['updateLater']!,
-                        style: const TextStyle(
-                          // 固定系统字体，不跟随用户自选字体
-                          fontFamily: _dialogFontFamily,
-                          fontFamilyFallback: _dialogFontFallback,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _updateNow,
-                      child: Text(
-                        s['updateNow']!,
-                        style: const TextStyle(
-                          // 固定系统字体，不跟随用户自选字体
-                          fontFamily: _dialogFontFamily,
-                          fontFamilyFallback: _dialogFontFallback,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 更新下载进度卡片（自绘）。
-  Widget _buildUpdateProgressCard() {
-    final s = AppStrings.of(context);
-    final percent = (_updateProgress.clamp(0.0, 1.0) * 100).round();
-    return Material(
-      color: const Color(0xFF2A2A2A),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 340,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          // 窗口过矮时允许内部滚动，避免 RenderFlex overflow 黄黑条纹
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  s['updateDownloading']!.replaceFirst('{0}', '$percent'),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    // 固定系统字体，不跟随用户自选字体
-                    fontFamily: _dialogFontFamily,
-                    fontFamilyFallback: _dialogFontFallback,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(value: _updateProgress.clamp(0.0, 1.0)),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _cancelDownload,
-                      child: Text(
-                        s['updateLater']!,
-                        style: const TextStyle(
-                          // 固定系统字体，不跟随用户自选字体
-                          fontFamily: _dialogFontFamily,
-                          fontFamilyFallback: _dialogFontFallback,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   // ================= 构建 =================
 
   @override
@@ -690,7 +139,7 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                 fit: StackFit.expand,
                 children: [
                   ColoredBox(color: widget.controller.bgColor),
-                  _ScaledClock(
+                  ScaledClock(
                     hour: _hour,
                     minute: _minute,
                     second: _second,
@@ -699,48 +148,86 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
                   ),
                   if (_menuOpen)
                     Positioned.fill(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          _ModalShade(onTap: _closeOverlay),
-                          OverlayPanel(
+                      // 各面板自包含模态外壳（ModalShell：遮罩+卡片+滚动），
+                      // 这里只负责按当前模式选择渲染哪个面板
+                      child: switch (_overlayMode) {
+                        OverlayMode.menu => MenuPanel(
                             controller: widget.controller,
-                            mode: _overlayMode,
                             autoLaunchSupported: _menuAutoLaunchSupported,
                             autoLaunchEnabled: _menuAutoLaunchEnabled,
                             onPickTextColor: () => _switchPicker(true),
                             onPickBgColor: () => _switchPicker(false),
                             onPickFont: _switchFontPicker,
                             onPickLanguage: _switchLanguagePicker,
+                            onPickRemindInterval: _switchRemindIntervalPicker,
+                            onAbout: _switchAbout,
+                            onToggleDebugLog: _toggleDebugLog,
                             onToggleLock: _toggleLock,
                             onToggleTop: _toggleAlwaysOnTop,
                             onToggleAutoLaunch: _toggleAutoLaunch,
                             onQuit: _quitApp,
-                            onBackToMenu: _backToMenu,
-                            onApplyColor: _applyColor,
-                            onApplyFont: _applyFont,
+                            onClose: _closeOverlay,
                           ),
-                        ],
-                      ),
+                        OverlayMode.pickingText => ColorPanel(
+                            controller: widget.controller,
+                            isText: true,
+                            onBack: _backToMenu,
+                            onApplyColor: _applyColor,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.pickingBg => ColorPanel(
+                            controller: widget.controller,
+                            isText: false,
+                            onBack: _backToMenu,
+                            onApplyColor: _applyColor,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.pickingFont => FontPanel(
+                            controller: widget.controller,
+                            onBack: _backToMenu,
+                            onApplyFont: _applyFont,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.pickingLang => LangPanel(
+                            controller: widget.controller,
+                            onBack: _backToMenu,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.remindInterval => RemindIntervalPanel(
+                            controller: widget.controller,
+                            onBack: _backToMenu,
+                            onApplyRemindInterval: (h) =>
+                                widget.controller.setUpdateRemindHours(h),
+                            onShowToast: _showToast,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.about => AboutPanel(
+                            controller: widget.controller,
+                            onBack: _backToMenu,
+                            onCheckUpdateNow: _checkUpdatesNow,
+                            onOpenLogFile: _openLogFile,
+                            onTapOutside: _closeOverlay,
+                          ),
+                      },
                     ),
                   // 更新弹窗渲染在菜单之上（模态）：先处理弹窗，菜单保持可用
                   if (_updatePromptVisible)
                     Positioned.fill(
-                      child: Stack(
-                        children: [
-                          // 遮罩：点击等同「稍后更新」
-                          _ModalShade(onTap: _updateLater),
-                          Center(child: _buildUpdatePromptCard()),
-                        ],
+                      child: UpdatePromptCard(
+                        info: _pendingUpdate!,
+                        onLater: _updateLater,
+                        onNow: _updateNow,
+                        // 遮罩点击无操作（防误触，避免误关弹窗/误入冷却）——
+                        // 关闭必须明确点「稍后」或「立即更新」按钮
+                        onTapOutside: () {},
                       ),
                     ),
                   if (_updateProgressVisible)
                     Positioned.fill(
-                      child: Stack(
-                        children: [
-                          _ModalShade(onTap: _cancelDownload),
-                          Center(child: _buildUpdateProgressCard()),
-                        ],
+                      child: UpdateProgressCard(
+                        progress: _updateProgress,
+                        onCancel: _cancelDownload,
+                        onTapOutside: _cancelDownload,
                       ),
                     ),
                   if (_toast != null)
@@ -788,125 +275,4 @@ class _ClockPageState extends State<ClockPage> with WindowListener {
       },
     );
   }
-}
-
-/// 时间显示：文本随窗口尺寸同步拉伸，铺满整个窗口。
-///
-/// 用 [CustomPaint] 直接在画布上绘制：先测量 80px 字号下文本的真实宽高，
-/// 再按 `scaleX = 可用宽 / 文本宽`、`scaleY = 可用高 / 文本高` 非等比拉伸
-/// （与原版 transform: scale(scaleX, scaleY) 行为一致）。
-///
-/// 之所以用 CustomPaint 而不是 widget 组合：
-/// - 不受窗口宽度约束影响，文本永远单行（不会换行/分行）；
-/// - 不参与布局溢出检测，窗口再小也不会出现 overflowed 警告；
-/// - 上下左右留安全边距，文本边缘不会顶到窗口边界被裁剪；
-/// - 支持任意 fontFamily（与 Text 一样），可通过右键菜单切换字体。
-class _ScaledClock extends StatelessWidget {
-  const _ScaledClock({
-    required this.hour,
-    required this.minute,
-    required this.second,
-    required this.textColor,
-    this.textFontFamily,
-  });
-
-  final String hour;
-  final String minute;
-  final String second;
-  final Color textColor;
-
-  /// 文字字体（null 表示系统默认字体）。
-  final String? textFontFamily;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyle = TextStyle(
-      fontSize: 80,
-      color: textColor,
-      height: 1.0,
-      fontFamily: textFontFamily,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    return CustomPaint(
-      painter: _ClockTextPainter(
-        text: '$hour:$minute:$second',
-        style: textStyle,
-      ),
-      size: Size.infinite,
-    );
-  }
-}
-
-/// 半透明模态遮罩（公共组件）：覆盖整个窗口，可选点击回调。
-/// 用于菜单/面板、更新弹窗等所有模态层，保证层级行为一致。
-class _ModalShade extends StatelessWidget {
-  const _ModalShade({this.onTap});
-
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: ColoredBox(color: Colors.black.withValues(alpha: 0.25)),
-      ),
-    );
-  }
-}
-
-/// 时钟文本的绘制器：测量文本后按窗口尺寸拉伸绘制。
-class _ClockTextPainter extends CustomPainter {
-  _ClockTextPainter({required this.text, required this.style});
-
-  final String text;
-  final TextStyle style;
-
-  /// 文本边缘到窗口边界的距离（避免贴边被裁剪）。
-  static const double edgeMargin = 4.0;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    // 取字形的实际视觉边界（而非整个行盒）：
-    // 行盒包含字体的 ascent/descent 空白，而数字字形只占行盒上半部分，
-    // 若按行盒居中，不同字体会明显偏上（特殊字体尤甚）。
-    // 用 getBoxesForSelection 拿到每个字形簇的边界，合并出紧致视觉范围。
-    var hLeft = 0.0;
-    var hRight = painter.width;
-    var vTop = 0.0;
-    var vBottom = painter.height;
-    final boxes = painter.getBoxesForSelection(
-      TextSelection(baseOffset: 0, extentOffset: text.length),
-    );
-    if (boxes.isNotEmpty) {
-      hLeft = boxes.map((b) => b.left).reduce(math.min);
-      hRight = boxes.map((b) => b.right).reduce(math.max);
-      vTop = boxes.map((b) => b.top).reduce(math.min);
-      vBottom = boxes.map((b) => b.bottom).reduce(math.max);
-    }
-    final visualW = math.max(1.0, hRight - hLeft);
-    final visualH = math.max(1.0, vBottom - vTop);
-    final availW = math.max(1.0, size.width - edgeMargin * 2);
-    final availH = math.max(1.0, size.height - edgeMargin * 2);
-    final scaleX = availW / visualW;
-    final scaleY = availH / visualH;
-    final visualCenterX = (hLeft + hRight) / 2;
-    final visualCenterY = (vTop + vBottom) / 2;
-
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    canvas.scale(scaleX, scaleY);
-    painter.paint(canvas, Offset(-visualCenterX, -visualCenterY));
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_ClockTextPainter oldDelegate) =>
-      oldDelegate.text != text || oldDelegate.style != style;
 }
