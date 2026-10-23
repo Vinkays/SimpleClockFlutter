@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../services/app_strings.dart';
+
 /// 时间显示：文本随窗口尺寸同步拉伸，铺满整个窗口。
 ///
 /// 用 [CustomPaint] 直接在画布上绘制：先测量 80px 字号下文本的真实宽高，
@@ -9,7 +11,8 @@ import 'package:flutter/material.dart';
 /// （与原版 transform: scale(scaleX, scaleY) 行为一致）。
 ///
 /// 12 小时制时（[amPm] 非空）AM/PM 直接拼在秒数后面（如 `11:11:44 PM`），
-/// 与数字同字号、同拉伸；24 小时制（[amPm] 为 null）不追加。
+/// 与数字同字号、同拉伸；文案按界面语言本地化：中文界面显示「上午/下午」，
+/// 英文界面显示「AM/PM」。24 小时制（[amPm] 为 null）不追加。
 ///
 /// 之所以用 CustomPaint 而不是 widget 组合：
 /// - 不受窗口宽度约束影响，文本永远单行（不会换行/分行）；
@@ -47,11 +50,19 @@ class ScaledClock extends StatelessWidget {
       fontFamily: textFontFamily,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    // AM/PM 拼在秒数之后，与数字同字号、随文本一起拉伸
-    final suffix = amPm == null ? '' : ' $amPm';
+    // AM/PM 拼在秒数之后，与数字同字号、随文本一起拉伸；
+    // 文案按界面语言本地化（zh：上午/下午；en：AM/PM）。
+    // 注意：suffix 在 24 小时制下为 null，拼接必须用 `?? ''`，
+    // 否则 Dart 插值会把 null 渲染成字符串 "null"。
+    String? suffix;
+    if (amPm != null) {
+      final s = AppStrings.of(context);
+      final label = amPm == 'AM' ? s['clockAmPmAM']! : s['clockAmPmPM']!;
+      suffix = ' $label';
+    }
     return CustomPaint(
       painter: ClockTextPainter(
-        text: '$hour:$minute:$second$suffix',
+        text: '$hour:$minute:$second${suffix ?? ''}',
         style: textStyle,
       ),
       size: Size.infinite,

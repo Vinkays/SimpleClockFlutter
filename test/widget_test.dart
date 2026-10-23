@@ -4,6 +4,7 @@
 // 不触发 window_manager 的平台调用（拖动/置顶等方法仅在用户交互时才会调用）。
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +15,7 @@ import 'package:simple_clock/services/store_service.dart';
 import 'package:simple_clock/services/time_format_service.dart';
 import 'package:simple_clock/services/update_service.dart';
 import 'package:simple_clock/ui/clock_page.dart';
+import 'package:simple_clock/ui/widgets/scaled_clock.dart';
 
 void main() {
   testWidgets('时钟界面渲染并显示时间', (WidgetTester tester) async {
@@ -194,6 +196,48 @@ void main() {
     // 时钟文本通过 CustomPaint 绘制，渲染过程不应产生任何布局溢出等异常
     expect(find.byType(CustomPaint), findsWidgets);
     expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('12 小时制 AM/PM 文案按界面语言本地化', (WidgetTester tester) async {
+    // 直接渲染 ScaledClock，通过 CustomPaint 的 painter.text 断言拼出的完整文本
+    Future<String> renderText(Locale locale, {String? amPm}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: locale,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('zh'), Locale('en')],
+          home: Center(
+            child: ScaledClock(
+              hour: '11',
+              minute: '11',
+              second: '44',
+              textColor: Colors.red,
+              amPm: amPm,
+            ),
+          ),
+        ),
+      );
+      final cp = tester.widget<CustomPaint>(
+        find.descendant(
+          of: find.byType(ScaledClock),
+          matching: find.byType(CustomPaint),
+        ),
+      );
+      return (cp.painter! as ClockTextPainter).text;
+    }
+
+    // 12 小时制：文案按界面语言本地化
+    expect(await renderText(const Locale('zh'), amPm: 'AM'), '11:11:44 上午');
+    expect(await renderText(const Locale('en'), amPm: 'AM'), '11:11:44 AM');
+    // 24 小时制：不追加任何后缀，且不得出现 "null"（插值空字符串的回归保护）
+    expect(await renderText(const Locale('zh')), '11:11:44');
+    expect(await renderText(const Locale('en')), '11:11:44');
 
     await tester.pumpWidget(const SizedBox());
   });

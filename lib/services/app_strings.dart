@@ -75,9 +75,12 @@ class AppStrings {
     'timeFollowSystem': '跟随系统',
     'timeFollowSystemDesc': '自动使用系统时间制式',
     'time12Hour': '12 小时制',
-    'time12HourDesc': '显示 AM/PM',
+    'time12HourDesc': '显示 上午/下午',
     'time24Hour': '24 小时制',
-    'time24HourDesc': '不显示 AM/PM',
+    'time24HourDesc': '不显示 上午/下午',
+    // 时钟显示
+    'clockAmPmAM': '上午',
+    'clockAmPmPM': '下午',
     // Toast
     'autoStartSuccess': '设置开机自启动成功',
     'autoStartRemoveSuccess': '移除开机自启动成功',
@@ -163,6 +166,9 @@ class AppStrings {
     'time12HourDesc': 'Show AM/PM',
     'time24Hour': '24-Hour',
     'time24HourDesc': 'Hide AM/PM',
+    // Clock display
+    'clockAmPmAM': 'AM',
+    'clockAmPmPM': 'PM',
     // Toast
     'autoStartSuccess': 'Auto start enabled',
     'autoStartRemoveSuccess': 'Auto start removed',
