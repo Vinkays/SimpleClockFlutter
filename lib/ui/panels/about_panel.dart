@@ -51,7 +51,16 @@ class AboutPanel extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.watch_later_outlined, size: 20, color: fg),
+                // 展示实际应用图标（assets/app_icon.png，黑底方形，加圆角更贴合图标块）
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/app_icon.png',
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Text(
                   s['aboutAppName']!,
