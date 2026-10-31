@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/app_controller.dart';
 import '../../services/app_strings.dart';
 import '../../services/font_service.dart';
+import '../../services/hotkey_service.dart';
 import '../widgets/modal_shell.dart';
 
 /// 右键菜单面板：自包含模态外壳（[ModalShell]），只负责菜单内容。
@@ -20,6 +21,7 @@ class MenuPanel extends StatefulWidget {
     required this.onPickFont,
     required this.onPickLanguage,
     required this.onPickTimeFormat,
+    required this.onPickPinHotkey,
     required this.onPickRemindInterval,
     required this.onAbout,
     required this.onToggleDebugLog,
@@ -40,6 +42,9 @@ class MenuPanel extends StatefulWidget {
 
   /// 打开「时间制式」面板。
   final VoidCallback onPickTimeFormat;
+
+  /// 打开「置顶快捷键」面板。
+  final VoidCallback onPickPinHotkey;
   final VoidCallback onPickRemindInterval;
 
   /// 打开「关于我们」面板。
@@ -171,6 +176,24 @@ class _MenuPanelState extends State<MenuPanel> {
             bg: controller.bgColor,
             height: itemHeight,
             onTap: widget.onToggleTop,
+          ),
+          _MenuRow(
+            label: s['menuPinHotkey']!,
+            fg: controller.textColor,
+            bg: controller.bgColor,
+            height: itemHeight,
+            trailing: Flexible(
+              child: Text(
+                formatHotkey(controller.effectivePinHotkey),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: controller.textColor.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+            onTap: widget.onPickPinHotkey,
           ),
           _MenuRow(
             label: s['menuLanguage']!,

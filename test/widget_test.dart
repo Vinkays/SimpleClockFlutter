@@ -4,17 +4,21 @@
 // 不触发 window_manager 的平台调用（拖动/置顶等方法仅在用户交互时才会调用）。
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:simple_clock/app.dart';
 import 'package:simple_clock/controllers/app_controller.dart';
+import 'package:simple_clock/services/hotkey_service.dart';
 import 'package:simple_clock/services/single_instance_service.dart';
 import 'package:simple_clock/services/store_service.dart';
 import 'package:simple_clock/services/time_format_service.dart';
 import 'package:simple_clock/services/update_service.dart';
 import 'package:simple_clock/ui/clock_page.dart';
+import 'package:simple_clock/ui/panels/hotkey_panel.dart';
 import 'package:simple_clock/ui/widgets/scaled_clock.dart';
 
 void main() {
@@ -117,6 +121,103 @@ void main() {
     await controller2.init();
 
     expect(controller2.timeFormat, '12h');
+  });
+
+  test('置顶快捷键：默认 Ctrl+Alt+Shift+T，可持久化并可恢复', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = StoreService();
+    await store.init();
+    final controller = AppController(store);
+    await controller.init();
+
+    // 未自定义时使用默认
+    expect(controller.pinHotkey, isNull);
+    expect(controller.effectivePinHotkey.key, PhysicalKeyboardKey.keyT);
+    expect(
+      controller.effectivePinHotkey.modifiers,
+      containsAll([
+        HotKeyModifier.control,
+        HotKeyModifier.alt,
+        HotKeyModifier.shift,
+      ]),
+    );
+
+    // 自定义为 Ctrl+Alt+D 并持久化
+    controller.setPinHotkey(
+      HotKey(
+        key: PhysicalKeyboardKey.keyD,
+        modifiers: const [HotKeyModifier.control, HotKeyModifier.alt],
+        scope: HotKeyScope.system,
+      ),
+    );
+
+    // 用新的实例模拟重启后的恢复
+    final store2 = StoreService();
+    await store2.init();
+    final controller2 = AppController(store2);
+    await controller2.init();
+
+    expect(controller2.pinHotkey, isNotNull);
+    expect(controller2.effectivePinHotkey.key, PhysicalKeyboardKey.keyD);
+    expect(
+      controller2.effectivePinHotkey.modifiers,
+      containsAll([HotKeyModifier.control, HotKeyModifier.alt]),
+    );
+  });
+
+  test('置顶快捷键：恢复默认清除自定义', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = StoreService();
+    await store.init();
+    final controller = AppController(store);
+    await controller.init();
+
+    controller.setPinHotkey(
+      HotKey(
+        key: PhysicalKeyboardKey.keyF,
+        modifiers: const [HotKeyModifier.shift],
+        scope: HotKeyScope.system,
+      ),
+    );
+    controller.setPinHotkey(null);
+
+    final store2 = StoreService();
+    await store2.init();
+    final controller2 = AppController(store2);
+    await controller2.init();
+
+    expect(controller2.pinHotkey, isNull);
+    expect(controller2.effectivePinHotkey.key, PhysicalKeyboardKey.keyT);
+  });
+
+  test('置顶快捷键：损坏的持久化数据回落默认', () async {
+    SharedPreferences.setMockInitialValues({'pinHotkey': '{broken json'});
+
+    final store = StoreService();
+    await store.init();
+    final controller = AppController(store);
+    await controller.init();
+
+    expect(controller.pinHotkey, isNull);
+    expect(controller.effectivePinHotkey.key, PhysicalKeyboardKey.keyT);
+  });
+
+  test('热键显示格式化', () {
+    final hk = HotKey(
+      key: PhysicalKeyboardKey.keyT,
+      modifiers: const [HotKeyModifier.control, HotKeyModifier.alt, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
+    expect(formatHotkey(hk), 'Ctrl+Alt+Shift+T');
+
+    final hkF1 = HotKey(
+      key: PhysicalKeyboardKey.f1,
+      modifiers: const [HotKeyModifier.control],
+      scope: HotKeyScope.system,
+    );
+    expect(formatHotkey(hkF1), 'Ctrl+F1');
   });
 
   test('Windows 时间格式串解析：h=12 小时制，H=24 小时制', () {
@@ -287,6 +388,112 @@ void main() {
     final context = tester.element(find.byType(ClockPage));
     final theme = Theme.of(context);
     expect(theme.textTheme.bodyMedium?.fontFamily, 'Consolas');
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('置顶快捷键：录制 Ctrl+Shift+F 进入待确认，Enter 确认启用', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = StoreService();
+    await store.init();
+    final controller = AppController(store);
+    await controller.init();
+
+    final applied = <HotKey?>[];
+    final toasts = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        home: HotkeyPanel(
+          controller: controller,
+          onBack: () {},
+          onApply: (hk) async {
+            applied.add(hk);
+            return true;
+          },
+          onShowToast: toasts.add,
+          onTapOutside: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 点击「更改快捷键」进入录制
+    await tester.tap(find.byIcon(Icons.keyboard));
+    await tester.pump();
+
+    // 模拟按下 Ctrl+Shift+F
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyF);
+    await tester.pump();
+
+    // 待确认态：录制框显示候选，尚未应用
+    expect(applied, isEmpty);
+    expect(find.text('Ctrl+Shift+F'), findsOneWidget);
+
+    // Enter 确认启用
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(applied, hasLength(1));
+    expect(applied.single?.physicalKey, PhysicalKeyboardKey.keyF);
+    expect(
+      applied.single?.modifiers,
+      containsAll(<HotKeyModifier>[HotKeyModifier.control, HotKeyModifier.shift]),
+    );
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('置顶快捷键：录制与当前相同组合时提示且不退出录制', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = StoreService();
+    await store.init();
+    final controller = AppController(store);
+    await controller.init();
+
+    final toasts = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        home: HotkeyPanel(
+          controller: controller,
+          onBack: () {},
+          onApply: (hk) async => true,
+          onShowToast: toasts.add,
+          onTapOutside: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.keyboard));
+    await tester.pump();
+
+    // 按下与当前默认相同的 Ctrl+Alt+Shift+T
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyT);
+    await tester.pump();
+
+    // 有提示，且录制未退出
+    expect(toasts, contains(contains('Same as current shortcut')));
+
+    // 松开修饰键后重新按 Ctrl+Shift+F，仍能捕获候选
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyF);
+    await tester.pump();
+    expect(find.text('Ctrl+Shift+F'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
   });

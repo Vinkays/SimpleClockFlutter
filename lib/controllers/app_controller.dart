@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/services.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../services/log_service.dart';
@@ -51,6 +53,27 @@ class AppController extends ChangeNotifier {
   /// 时间制式：'system'（跟随系统）| '12h' | '24h'。
   String _timeFormat = 'system';
   String get timeFormat => _timeFormat;
+
+  /// 自定义置顶快捷键（null 表示使用默认）。
+  HotKey? _pinHotkey;
+  HotKey? get pinHotkey => _pinHotkey;
+
+  /// 默认置顶快捷键：Ctrl+Alt+Shift+T。
+  ///
+  /// 四键组合冲突面最小（常见默认热键集中在一~三键）；
+  /// 置顶切换是低频操作，三修饰键同按的负担可接受。
+  HotKey get defaultPinHotkey => HotKey(
+        key: PhysicalKeyboardKey.keyT,
+        modifiers: const [
+          HotKeyModifier.control,
+          HotKeyModifier.alt,
+          HotKeyModifier.shift,
+        ],
+        scope: HotKeyScope.system,
+      );
+
+  /// 当前生效的置顶快捷键（未自定义时使用默认）。
+  HotKey get effectivePinHotkey => _pinHotkey ?? defaultPinHotkey;
 
   /// 系统检测到的默认时间制式（true=12 小时制，false=24 小时制，null=检测失败）。
   bool? _system12Hour;
@@ -102,6 +125,7 @@ class AppController extends ChangeNotifier {
     _textFontFamily = store.textFontFamily;
     _language = store.language ?? 'system';
     _timeFormat = store.timeFormat;
+    _pinHotkey = _parsePinHotkey(store.pinHotkey);
     _system12Hour = await _detectSystem12Hour();
     _updateRemindHours = store.updateRemindHours;
     _debugLogEnabled = store.debugLogEnabled;
@@ -138,6 +162,28 @@ class AppController extends ChangeNotifier {
     _timeFormat = value;
     store.setTimeFormat(value);
     notifyListeners();
+  }
+
+  /// 设置置顶快捷键（null 表示恢复默认），持久化并广播。
+  ///
+  /// 只改配置不注册/注销热键——实际注册由界面层（HotkeyService）
+  /// 在启动与改键时执行，保证注册失败（冲突）时能即时提示。
+  void setPinHotkey(HotKey? hotKey) {
+    _pinHotkey = hotKey;
+    store.setPinHotkey(
+      hotKey == null ? null : jsonEncode(hotKey.toJson()),
+    );
+    notifyListeners();
+  }
+
+  /// 从持久化 JSON 恢复 HotKey；解析失败（数据损坏）回落默认。
+  HotKey? _parsePinHotkey(String? json) {
+    if (json == null || json.isEmpty) return null;
+    try {
+      return HotKey.fromJson(jsonDecode(json) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 设置「更新提醒间隔」小时数，持久化并广播。

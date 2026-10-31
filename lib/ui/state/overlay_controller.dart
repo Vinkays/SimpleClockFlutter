@@ -13,6 +13,56 @@ mixin OverlayMixin on WindowResizeMixin, ModalMixin, ToastMixin {
 
   final AutoLaunchService _autoLaunch = AutoLaunchService();
 
+  /// 置顶快捷键全局热键（注册/注销/Windows 冲突探测）。
+  final HotkeyService _hotkeys = HotkeyService();
+
+  /// 启动时注册置顶快捷键（默认 Ctrl+Alt+Shift+T；被占用时提示换键）。
+  ///
+  /// 注意：不能在 await 前读取 AppStrings.of(context)（initState 阶段禁止
+  /// 依赖 inherited widget），因此失败提示放到 await 之后、mounted 防护内。
+  Future<void> _initPinHotkey() async {
+    final hk = widget.controller.effectivePinHotkey;
+    final ok = await _hotkeys.register(hk, onTrigger: () {
+      // 全局热键触发：无论窗口是否聚焦/可见都即时切换置顶
+      widget.controller.toggleAlwaysOnTop();
+    });
+    if (!ok && mounted) {
+      _showToast(
+          '${AppStrings.of(context)['hotkeyConflict']!}${formatHotkey(hk)}');
+    }
+  }
+
+  /// 退出前注销全局热键（释放系统热键槽位）。
+  void _disposePinHotkey() {
+    _hotkeys.dispose();
+  }
+
+  /// 打开「置顶快捷键」设置面板（面板较宽，需要更大的临时窗口）。
+  void _switchPinHotkeyPicker() {
+    setState(() => _overlayMode = OverlayMode.pinHotkey);
+    _ensureWindowSize(const Size(420, 300));
+  }
+
+  /// 应用新置顶快捷键（null 恢复默认）：持久化 → 重新注册 → 结果提示。
+  /// 注册冲突时返回 false，面板保持打开以便换键。
+  Future<bool> _applyPinHotkey(HotKey? hotKey) async {
+    final controller = widget.controller;
+    final s = AppStrings.of(context);
+    controller.setPinHotkey(hotKey);
+    final hk = controller.effectivePinHotkey;
+    final ok = await _hotkeys.register(hk, onTrigger: () {
+      controller.toggleAlwaysOnTop();
+    });
+    if (!mounted) return ok;
+    if (ok) {
+      _showToast(s['hotkeyApplied']!);
+      await _closeOverlay();
+    } else {
+      _showToast('${s['hotkeyConflict']!}${formatHotkey(hk)}');
+    }
+    return ok;
+  }
+
   /// 首次启动默认开启开机自启动。
   ///
   /// 仅当从未初始化过时调用一次 [AutoLaunchService.enable]；

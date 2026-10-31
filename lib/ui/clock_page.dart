@@ -6,6 +6,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/gestures.dart'
     show kPrimaryMouseButton, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../controllers/app_controller.dart';
@@ -16,10 +17,12 @@ import '../services/update_service.dart';
 import 'panels/about_panel.dart';
 import 'panels/color_panel.dart';
 import 'panels/font_panel.dart';
+import 'panels/hotkey_panel.dart';
 import 'panels/lang_panel.dart';
 import 'panels/menu_panel.dart';
 import 'panels/remind_interval_panel.dart';
 import 'panels/time_format_panel.dart';
+import '../services/hotkey_service.dart';
 import 'widgets/scaled_clock.dart';
 import 'widgets/update_cards.dart';
 
@@ -39,7 +42,8 @@ part 'state/overlay_controller.dart';
 part 'state/drag_controller.dart';
 part 'state/update_flow.dart';
 
-/// 覆盖层模式：右键菜单 / 选色 / 字体 / 语言 / 时间制式 / 更新提醒间隔 / 关于。
+/// 覆盖层模式：右键菜单 / 选色 / 字体 / 语言 / 时间制式 / 置顶快捷键 /
+/// 更新提醒间隔 / 关于。
 enum OverlayMode {
   menu,
   pickingText,
@@ -47,6 +51,7 @@ enum OverlayMode {
   pickingFont,
   pickingLang,
   timeFormat,
+  pinHotkey,
   remindInterval,
   about,
 }
@@ -87,6 +92,8 @@ class _ClockPageState extends State<ClockPage>
     _startUpdateSchedule();
     // 首次启动默认开启开机自启动（写标记后尊重用户后续选择）
     _initAutoStartDefault();
+    // 注册置顶快捷键全局热键（默认 Ctrl+Alt+Shift+T）
+    _initPinHotkey();
   }
 
   @override
@@ -95,6 +102,8 @@ class _ClockPageState extends State<ClockPage>
     _disposeClockTicker();
     _disposeToast();
     _disposeUpdateSchedule();
+    // 注销置顶快捷键全局热键（进程退出前释放系统热键槽位）
+    _disposePinHotkey();
     super.dispose();
   }
 
@@ -164,6 +173,7 @@ class _ClockPageState extends State<ClockPage>
                             onPickFont: _switchFontPicker,
                             onPickLanguage: _switchLanguagePicker,
                             onPickTimeFormat: _switchTimeFormatPicker,
+                            onPickPinHotkey: _switchPinHotkeyPicker,
                             onPickRemindInterval: _switchRemindIntervalPicker,
                             onAbout: _switchAbout,
                             onToggleDebugLog: _toggleDebugLog,
@@ -201,6 +211,13 @@ class _ClockPageState extends State<ClockPage>
                         OverlayMode.timeFormat => TimeFormatPanel(
                             controller: widget.controller,
                             onBack: _backToMenu,
+                            onTapOutside: _closeOverlay,
+                          ),
+                        OverlayMode.pinHotkey => HotkeyPanel(
+                            controller: widget.controller,
+                            onBack: _backToMenu,
+                            onApply: _applyPinHotkey,
+                            onShowToast: _showToast,
                             onTapOutside: _closeOverlay,
                           ),
                         OverlayMode.remindInterval => RemindIntervalPanel(

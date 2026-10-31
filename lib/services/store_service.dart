@@ -15,6 +15,7 @@ class StoreService {
   static const String kTextFontFamily = 'appearance.textFontFamily';
   static const String kLanguage = 'language';
   static const String kTimeFormat = 'timeFormat';
+  static const String kPinHotkey = 'pinHotkey';
   static const String kSingleInstancePort = 'singleInstancePort';
   static const String kAutoStartInitialized = 'autoStartInitialized';
   static const String kUpdateRemindHours = 'update.remindIntervalHours';
@@ -106,6 +107,18 @@ class StoreService {
 
   Future<void> setTimeFormat(String value) async {
     await _prefs?.setString(kTimeFormat, value);
+  }
+
+  /// 保存的置顶快捷键（HotKey.toJson 序列化的 JSON 字符串；
+  /// null 表示未自定义 → 使用默认 Ctrl+Alt+Shift+T）。
+  String? get pinHotkey => _prefs?.getString(kPinHotkey);
+
+  Future<void> setPinHotkey(String? json) async {
+    if (json == null) {
+      await _prefs?.remove(kPinHotkey);
+    } else {
+      await _prefs?.setString(kPinHotkey, json);
+    }
   }
 
   /// 单实例锁使用的端口号（null 表示尚未记录）。
