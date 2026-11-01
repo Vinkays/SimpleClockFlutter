@@ -218,6 +218,32 @@ void main() {
       scope: HotKeyScope.system,
     );
     expect(formatHotkey(hkF1), 'Ctrl+F1');
+
+    // 修饰键乱序输入仍按固定顺序输出（Ctrl → Alt → Shift）
+    final hkOrder = HotKey(
+      key: PhysicalKeyboardKey.keyT,
+      modifiers: const [
+        HotKeyModifier.shift,
+        HotKeyModifier.control,
+        HotKeyModifier.alt,
+      ],
+      scope: HotKeyScope.system,
+    );
+    expect(formatHotkey(hkOrder), 'Ctrl+Alt+Shift+T');
+
+    // 方向键与小键盘（依赖 usbHidUsage 映射，release 下同样可用）
+    final hkUp = HotKey(
+      key: PhysicalKeyboardKey.arrowUp,
+      modifiers: const [HotKeyModifier.alt],
+      scope: HotKeyScope.system,
+    );
+    expect(formatHotkey(hkUp), 'Alt+↑');
+    final hkNumpad = HotKey(
+      key: PhysicalKeyboardKey.numpad0,
+      modifiers: const [HotKeyModifier.control],
+      scope: HotKeyScope.system,
+    );
+    expect(formatHotkey(hkNumpad), 'Ctrl+小键盘0');
   });
 
   test('Windows 时间格式串解析：h=12 小时制，H=24 小时制', () {

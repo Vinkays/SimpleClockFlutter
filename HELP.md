@@ -28,6 +28,16 @@ flutter run -d windows   # 或 -d macos / -d linux
 flutter test
 ```
 
+## 本地打包测试（Release）
+
+```sh
+flutter build windows --release # 或 macos / linux 同理
+```
+
+产物：`build\windows\x64\runner\Release\simple_clock.exe`（调试版用 `--debug`，产物在 `...\Debug\`）。
+
+> 用于本地验证发布版构建是否通过；正式分发（安装包/自动更新）仍走下方「各平台安装包」流程。
+
 ## 更新版本号
 
 版本号共 5 处：`pubspec.yaml` 的 `version`、`lib/services/update_config.dart` 的 `currentVersion`、`packaging/windows/simple_clock.iss` 的 `MyAppVersion`、`packaging/macos/build_dmg.sh` 的 `VERSION`、`packaging/linux/build_appimage.sh` 的 `VERSION`。
