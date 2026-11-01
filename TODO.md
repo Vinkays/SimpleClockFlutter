@@ -20,3 +20,16 @@
   - [x] 设置项：「跟随系统 / 12 小时制 / 24 小时制」三选，默认跟随系统，检测失败回落 24 小时制（保持既有显示习惯）
   - [x] `clock_page.dart` 显示逻辑按选择格式化：12 小时制小时转 1-12 并在秒数后显示 AM/PM（与数字同字号、同拉伸）；24 小时制不显示 AM/PM
 - **涉及文件**：`lib/ui/clock_page.dart`、`lib/controllers/app_controller.dart`、`lib/services/time_format_service.dart`（新增）、`lib/services/store_service.dart`、`lib/ui/widgets/scaled_clock.dart`、`lib/ui/state/clock_ticker.dart`、`lib/ui/panels/time_format_panel.dart`（新增）、`lib/ui/panels/menu_panel.dart`、`lib/ui/state/overlay_controller.dart`、`lib/services/app_strings.dart`
+
+## 时钟增加「倒计时 / 计时器」模式与提示音
+
+- **状态**：待办
+- **背景**：当前应用只提供时钟显示；用户希望可切换为倒计时（设定时长到点提醒）和计时器（正计时/秒表式）两种模式，并扩展置顶时钟的使用场景
+- **方案**：
+  - [ ] 模式切换：右键菜单/时钟界面新增「时钟 / 倒计时 / 计时器」模式切换（扩展 `OverlayMode`），设置持久化
+  - [ ] 模式标识图标：倒计时 / 计时器模式在主页面数字最前方显示区分图标（时钟模式不显示图标）；倒计时与计时器使用**不同图标**，图标随数字等比缩放、采用当前文字颜色（`scaled_clock.dart` 绘制层）
+  - [ ] 倒计时：设置目标时长后开始，剩余时间显示到 0 结束；结束时停止走时并触发结束提示音
+  - [ ] 计时器（正计时）：从 0 开始累计经过时长，可随时开始/暂停/重置
+  - [ ] 提示音：计时开始播放一种提示音，结束播放另一种（开始/结束不同，便于区分状态）；提示音来源待定（系统提示音 / 内置音频资源 / 音频播放插件），三平台可用性需评估
+  - [ ] 暂停/重置/关闭交互与文案（中英文词条）
+- **涉及文件**：`lib/ui/clock_page.dart`、`lib/ui/state/overlay_controller.dart`、`lib/ui/panels/menu_panel.dart`、`lib/ui/panels/timer_panel.dart`（新增）、`lib/ui/widgets/scaled_clock.dart`、`lib/services/app_strings.dart`、`lib/services/store_service.dart`、`lib/controllers/app_controller.dart`
