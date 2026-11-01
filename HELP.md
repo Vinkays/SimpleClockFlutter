@@ -5,7 +5,7 @@
 - Flutter SDK（3.x 以上，本项目基于 3.47 开发）
 - **Windows**：Visual Studio 2022（勾选「使用 C++ 的桌面开发」工作负载）+ 系统设置中开启「开发者模式」（插件构建需要符号链接支持）
 - **macOS**：Xcode（在 macOS 上构建）
-- **Linux**：GTK 3 开发库、ninja、clang、pkg-config 等（`flutter doctor` 会提示缺失项）
+- **Linux**：GTK 3 开发库、ninja、clang、pkg-config、keybinder-3.0（`hotkey_manager` 全局热键所需，Ubuntu 装 `libkeybinder-3.0-dev`）等（`flutter doctor` 会提示缺失项）
 
 > 国内网络环境建议配置镜像后运行：
 >
