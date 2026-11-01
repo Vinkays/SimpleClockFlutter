@@ -30,6 +30,7 @@ SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Lin
   - 时间制式：跟随系统（自动检测平台设置）/ 12 小时制（秒数后显示 AM/PM）/ 24 小时制
   - 锁定（禁止拖动与缩放）/ 解除锁定
   - 置顶 / 移除置顶
+  - 置顶快捷键：全局切换置顶， 默认 `Ctrl+Alt+Shift+T`
   - 设置 / 移除开机自启动（首次启动默认开启）
   - 更新提醒间隔：预设 6/12/24/48/72 小时，或自定义 1–8760 小时
   - 调试日志：开关控制更新检查链路日志落盘，便于远程诊断
@@ -42,7 +43,7 @@ SimpleClockFlutter-简易时钟(Flutter版) 是一款面向Windows、macOS、Lin
   - 冷却去重：点「稍后」后该版本在提醒间隔内不再打扰（跨重启保留）
 - 应用日志：记录更新检查链路每一步（通道命中 / HTTP 状态 / 退避 / 冷却 / 下载），开关控制写入，系统编辑器查看
 - 操作结果通过应用内 Toast 轻提示（Toast 居中显示，任何窗口尺寸都完整可见）
-- 窗口位置、大小、置顶状态、外观颜色、字体、语言自动持久化，重启恢复
+- 窗口位置、大小、置顶状态、置顶快捷键、外观颜色、字体、语言自动持久化，重启恢复
 - 多显示器下窗口位置越界自动归位到主屏
 
 ## 与原版 Electron 版的差异
@@ -65,9 +66,10 @@ lib/
 ├── main.dart                     # 入口：窗口初始化（无边框、尺寸/位置恢复、置顶）
 ├── app.dart                      # 根组件：全局主题（textTheme 字体跟随、本地化 delegates）
 ├── controllers/
-│   └── app_controller.dart       # 全局状态：外观 / 锁定 / 置顶 / 窗口几何 / 字体 / 语言 / 调试日志
+│   └── app_controller.dart       # 全局状态：外观 / 锁定 / 置顶 / 置顶快捷键 / 窗口几何 / 字体 / 语言 / 调试日志
 ├── services/
-│   ├── store_service.dart        # 持久化存储（shared_preferences：外观、窗口、冷却、日志开关）
+│   ├── store_service.dart        # 持久化存储（shared_preferences：外观、窗口、热键、冷却、日志开关）
+│   ├── hotkey_service.dart       # 置顶快捷键全局热键（hotkey_manager + Windows FFI 冲突探测 + 热键显示格式化）
 │   ├── time_format_service.dart  # 系统时间制式检测（Windows 注册表 / macOS defaults / Linux gsettings）
 │   ├── auto_launch_service.dart  # 开机自启动（launch_at_startup）
 │   ├── font_service.dart         # 系统字体枚举（Windows 注册表 / macOS 目录 / Linux fc-list）
@@ -85,6 +87,7 @@ lib/
     │   ├── color_panel.dart      # HSV 选色 + 预设色块
     │   ├── font_panel.dart       # 字体选择（搜索 + 实时预览）
     │   ├── lang_panel.dart       # 语言选择（含 PanelHeader 公共标题行）
+    │   ├── hotkey_panel.dart     # 置顶快捷键录制面板
     │   └── remind_interval_panel.dart # 更新提醒间隔（预设 + 自定义小时数）
     ├── state/                    # clock_page 行为 mixin（part of，共享私有成员）
     │   ├── clock_ticker.dart     # 时钟走时（整秒对齐 + 每秒更新）
